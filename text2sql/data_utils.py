@@ -165,7 +165,7 @@ def extract_sql_query(response: str) -> str:
         text = text[match.start():]
 
     # 4. Strip trailing spaces, newlines, or semicolons (keep one if needed)
-    text = text.strip()
+    text = text.strip().replace("\n", " ")
 
     return text
 

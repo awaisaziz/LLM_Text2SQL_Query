@@ -77,7 +77,9 @@ Use `evaluate.py` to call the official Spider evaluation script and obtain exact
 
 ```bash
 python install.py
-python -m text2sql.evaluate outputs/predictions.jsonl
+```
+
+```bash
 python evaluation.py
 --gold spider_data/dev_gold.sql
 --pred outputs/predictions.sql

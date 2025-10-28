@@ -6,7 +6,7 @@ from textwrap import dedent
 
 ZERO_SHOT_TEMPLATE = dedent(
     """
-    You are an expert SQL developer.
+    You are an expert SQL query developer.
     Given the following database schema:
     {schema}
     Write a correct SQL query to answer this question:
