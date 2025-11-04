@@ -52,13 +52,6 @@ Copy the example environment file and add your API key:
 
 ```bash
 cp text2sql/.env.example text2sql/.env
-# edit text2sql/.env and add your OpenRouter key
-```
-
-Finally, export the API key before running the pipeline:
-
-```bash
-export $(grep -v '^#' text2sql/.env | xargs)
 ```
 
 ## Running inference
@@ -67,6 +60,10 @@ The baseline is invoked via `app.py`. A minimal example that runs the first 20 d
 
 ```bash
 python -m text2sql.app --model deepseek/deepseek-r1:free --num_samples 20 --out outputs/predictions.jsonl
+```
+
+```bash
+python DIN-SQL.py --dataset spider_data/ --output outputs/predicted_sql.txt
 ```
 
 The resulting JSONL file contains four fields per line: `question`, `gold_sql`, `pred_sql`, and `db_id`.
