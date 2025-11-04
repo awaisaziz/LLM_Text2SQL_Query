@@ -1,8 +1,0 @@
-{
-  "spider_path": "spider_data",
-  "dev_filename": "dev.json",
-  "tables_filename": "tables.json",
-  "gold_sql_filename": "dev_gold.sql",
-  "database_dir": "database",
-  "default_model": "deepseek/deepseek-r1:free"
-}
