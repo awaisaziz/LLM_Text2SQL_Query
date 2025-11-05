@@ -39,6 +39,7 @@ ml_dtypes==0.5.3
 nest-asyncio==1.6.0
 numpy==2.3.4
 ollama==0.6.0
+openai==1.60.1
 opt_einsum==3.4.0
 packaging==25.0
 pandas==2.3.1

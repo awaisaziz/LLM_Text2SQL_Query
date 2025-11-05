@@ -1,7 +1,5 @@
 
-# Baselines and outputs
+# Text-to-SQL Evaluation Framework (baseline)
 
-we have baselines implementation here. Also we have outputs from different model stored with predicted queries.
-
-we run the test in the following method to get the evaluation of those resules
+This folder contains implementations and outputs for multiple Text-to-SQL used for baselines, including **DIA-SQL**, and **DIN-SQL** models. Each model translates natural language questions into executable SQL queries and is evaluated on standard datasets such as **Spider 1.0**.
 

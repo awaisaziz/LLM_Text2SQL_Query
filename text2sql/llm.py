@@ -1,4 +1,4 @@
-"""Client wrappers for calling OpenRouter models."""
+"""Client wrappers for calling OpenRouter and DeepSeek models."""
 from __future__ import annotations
 
 import logging
@@ -6,13 +6,10 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import requests
-from requests import Response
-from tenacity import RetryError, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from openai import OpenAI, OpenAIError
+from openai.types.chat import ChatCompletion
 
 LOGGER = logging.getLogger(__name__)
-
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 class LLMError(RuntimeError):
@@ -25,83 +22,110 @@ class LLMResult:
     raw: Dict[str, Any]
 
 
-class OpenRouterLLM:
-    """Simple wrapper around the OpenRouter chat completions endpoint."""
+@dataclass
+class RouterConfig:
+    """Configuration required to initialise an OpenAI compatible router."""
 
-    def __init__(self, api_key: Optional[str] = None, timeout: int = 120) -> None:
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        if not self.api_key:
-            raise EnvironmentError(
-                "OPENROUTER_API_KEY environment variable is required to call the API."
-            )
-        self.timeout = timeout
+    base_url: str
+    api_key_env: str
+    default_headers: Optional[Dict[str, str]] = None
 
-    # Retry with exponential backoff for transient HTTP errors
-    @retry(
-        retry=retry_if_exception_type((requests.RequestException, LLMError)),
-        wait=wait_exponential(multiplier=1, min=1, max=20),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
-    
-    def generate(self, prompt: str, model: str) -> LLMResult:
-        """Call OpenRouter to generate SQL for ``prompt`` using ``model``."""
 
-        payload = {
-            "model": model,
-            "temperature": 0,
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt},
-            ],
-        }
+ROUTER_CONFIGS: Dict[str, RouterConfig] = {
+    "openrouter": RouterConfig(
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+    ),
+    "deepseek": RouterConfig(
+        base_url="https://api.deepseek.com/v1",
+        api_key_env="DEEPSEEK_API_KEY",
+    ),
+}
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
 
-        LOGGER.debug("Calling OpenRouter model %s", model)
-        LOGGER.debug("Model's prompt %s", prompt)
+class OpenAIChatLLM:
+    """Wrapper around OpenAI compatible chat completion endpoints."""
+
+    def __init__(self, router: str, api_key: Optional[str] = None, timeout: int = 120) -> None:
         try:
-            response: Response = requests.post(
-                OPENROUTER_API_URL, json=payload, headers=headers, timeout=self.timeout
+            router_config = ROUTER_CONFIGS[router]
+        except KeyError as exc:  # pragma: no cover - defensive programming
+            raise ValueError(
+                f"Unsupported router '{router}'. Supported routers: {', '.join(sorted(ROUTER_CONFIGS))}."
+            ) from exc
+
+        resolved_api_key = api_key or os.getenv(router_config.api_key_env)
+        if not resolved_api_key:
+            raise EnvironmentError(
+                f"{router_config.api_key_env} environment variable is required to call the {router} API."
             )
-        except requests.RequestException as exc:  # pragma: no cover - network dependent
-            LOGGER.exception("OpenRouter request failed: %s", exc)
-            raise
 
-        if response.status_code != 200:
-            LOGGER.error(
-                "OpenRouter returned status %s: %s", response.status_code, response.text
+        LOGGER.debug("Initialising OpenAI client for router '%s'", router)
+
+        client = OpenAI(
+            api_key=resolved_api_key,
+            base_url=router_config.base_url,
+            default_headers=router_config.default_headers,
+        )
+        self.client = client.with_options(timeout=timeout)
+        self.router = router
+
+    def generate(self, prompt: str, model: str) -> LLMResult:
+        """Call the configured router to generate SQL for ``prompt`` using ``model``."""
+
+        LOGGER.debug("Calling router '%s' with model %s", self.router, model)
+        LOGGER.debug("Model prompt: %s", prompt)
+
+        try:
+            completion: ChatCompletion = self.client.chat.completions.create(
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt},
+                ],
             )
-            raise LLMError(f"OpenRouter API error {response.status_code}")
+        except OpenAIError as exc:  # pragma: no cover - network dependent
+            LOGGER.exception("%s request failed: %s", self.router, exc)
+            raise LLMError(f"{self.router} request failed") from exc
 
-        data = response.json()
-        sql = self._extract_sql(data)
-
+        sql = self._extract_sql(completion)
         LOGGER.debug("Received SQL: %s", sql)
-        return LLMResult(sql=sql, raw=data)
+        return LLMResult(sql=sql, raw=completion.model_dump())
 
     @staticmethod
-    def _extract_sql(data: Dict[str, Any]) -> str:
-        choices = data.get("choices") or []
-        if not choices:
-            raise LLMError("No choices returned from OpenRouter API.")
+    def _extract_sql(completion: ChatCompletion) -> str:
+        if not completion.choices:
+            raise LLMError("No choices returned from completion response.")
 
-        message = choices[0].get("message", {})
-        content = message.get("content")
+        message = completion.choices[0].message
+        content = message.content
         if not content:
-            raise LLMError("No content in OpenRouter response.")
+            raise LLMError("No content in completion response.")
 
-        return content.strip()
+        if isinstance(content, str):
+            text_content = content
+        else:
+            # content may be a list of message parts; concatenate any text components
+            text_parts = [
+                getattr(part, "text", "")
+                for part in content
+                if getattr(part, "type", None) == "text" and getattr(part, "text", "")
+            ]
+            if not text_parts:
+                raise LLMError("Completion content did not contain text parts.")
+            text_content = "".join(text_parts)
+
+        return text_content.strip()
 
 
-def safe_generate(prompt: str, model: str, api_key: Optional[str] = None) -> LLMResult:
-    """Convenience function that wraps :class:`OpenRouterLLM` with logging."""
+def safe_generate(
+    prompt: str,
+    model: str,
+    router: str = "openrouter",
+    api_key: Optional[str] = None,
+) -> LLMResult:
+    """Convenience function that wraps :class:`OpenAIChatLLM` with logging."""
 
-    client = OpenRouterLLM(api_key=api_key)
-    try:
-        return client.generate(prompt=prompt, model=model)
-    except RetryError as exc:  # pragma: no cover - depends on API availability
-        raise LLMError(f"OpenRouter request ultimately failed: {exc}") from exc
+    client = OpenAIChatLLM(router=router, api_key=api_key)
+    return client.generate(prompt=prompt, model=model)
