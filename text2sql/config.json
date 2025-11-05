@@ -4,5 +4,6 @@
   "tables_filename": "tables.json",
   "gold_sql_filename": "dev_gold.sql",
   "database_dir": "database",
+  "default_router": "openrouter",
   "default_model": "deepseek/deepseek-r1:free"
 }

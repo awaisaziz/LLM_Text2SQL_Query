@@ -28,7 +28,14 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default=None,
-        help="OpenRouter model identifier (defaults to config default_model).",
+        help="Model identifier for the selected router (defaults to config default_model).",
+    )
+    parser.add_argument(
+        "--router",
+        type=str,
+        default=None,
+        choices=sorted(llm.ROUTER_CONFIGS.keys()),
+        help="LLM router to target (defaults to config default_router or openrouter).",
     )
     parser.add_argument(
         "--num_samples",
@@ -81,20 +88,25 @@ def main() -> None:
     logging.info("Logging has started")
 
     dataset = data_utils.load_dataset_from_config(args.config)
-    model_name = args.model
-    if not model_name:
-        config = json.loads(Path(args.config).read_text())
-        model_name = config.get("default_model")
-        if not model_name:
-            raise ValueError("No model specified. Provide --model or default_model in config.json.")
+    config = json.loads(Path(args.config).read_text())
 
-    LOGGER.info("Using model %s", model_name)
+    model_name = args.model or config.get("default_model")
+    if not model_name:
+        raise ValueError("No model specified. Provide --model or default_model in config.json.")
+
+    router_name = args.router or config.get("default_router") or "openrouter"
+    if router_name not in llm.ROUTER_CONFIGS:
+        raise ValueError(
+            f"Unsupported router '{router_name}'. Valid options: {', '.join(sorted(llm.ROUTER_CONFIGS))}."
+        )
+
+    LOGGER.info("Using router %s with model %s", router_name, model_name)
 
     predictions_path = args.out
     predictions_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Initiate the LLM through OpenRouter
-    client = llm.OpenRouterLLM()
+    # Initiate the LLM through the selected router
+    client = llm.OpenAIChatLLM(router=router_name)
 
     pred_rows: List[str] = []
     start_time = perf_counter()
@@ -105,9 +117,10 @@ def main() -> None:
         prompt = prompt_template.build_prompt(example.question, schema, db_id=example.db_id)
 
         try:
+            LOGGER.info("Prompt sent to LLM: %s", prompt)
             result = client.generate(prompt=prompt, model=model_name)
             predicted_sql = data_utils.extract_sql_query(result.sql)
-            LOGGER.info("Predicted SQL Query %s", predicted_sql)
+            LOGGER.info("Predicted SQL Query: %s", predicted_sql)
         except Exception as exc:  # pragma: no cover - network dependent
             LOGGER.error("Failed to generate SQL for %s: %s", example.db_id, exc)
             predicted_sql = ""

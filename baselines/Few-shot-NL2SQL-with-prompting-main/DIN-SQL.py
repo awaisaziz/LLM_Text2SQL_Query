@@ -457,8 +457,6 @@ client = OpenAI(
 
 # Default model (change if needed)
 MODEL = "deepseek-chat"
-# MODEL = "deepseek-reasoner"
-
 
 def load_data(DATASET):
     return pd.read_json(DATASET)
