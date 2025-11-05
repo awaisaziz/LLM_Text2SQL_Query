@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# LLM_Text2SQL_Query
-Class project for Text to SQL Generation
-=======
 # Text-to-SQL Baseline with OpenRouter
 
 This repository contains a lightweight baseline pipeline for evaluating large language models on the [Spider](https://yale-lily.github.io/spider) Text-to-SQL benchmark using the OpenRouter API. The goal is to provide a clean, modular starting point that can be easily extended with few-shot prompting, schema formatting improvements, and caching.
@@ -94,4 +90,3 @@ The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, a
 - Add experiments and ablation studies under a new module without touching the core baseline files.
 
 Contributions are welcome!
->>>>>>> dev
