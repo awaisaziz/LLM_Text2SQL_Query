@@ -1,4 +1,4 @@
-# Text-to-SQL Baseline with OpenRouter
+# Text-to-SQL Baseline
 
 This repository contains a lightweight baseline pipeline for evaluating large language models on the [Spider](https://yale-lily.github.io/spider) Text-to-SQL benchmark using the OpenRouter API. The goal is to provide a clean, modular starting point that can be easily extended with few-shot prompting, schema formatting improvements, and caching.
 
