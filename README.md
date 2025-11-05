@@ -59,11 +59,7 @@ cp text2sql/.env.example text2sql/.env
 The baseline is invoked via `app.py`. A minimal example that runs the first 20 development examples using the DeepSeek open model is shown below:
 
 ```bash
-python -m text2sql.app --model deepseek/deepseek-r1:free --num_samples 20 --out outputs/predictions.jsonl
-```
-
-```bash
-python DIN-SQL.py --dataset spider_data/ --output outputs/predicted_sql.txt
+python -m text2sql.app --router deepseek --model deepseek-reasoner --num_samples 20 --out outputs/predictions.jsonl
 ```
 
 The resulting JSONL file contains four fields per line: `question`, `gold_sql`, `pred_sql`, and `db_id`.
