@@ -4,10 +4,11 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from openai import OpenAI, OpenAIError
 from openai.types.chat import ChatCompletion
+from text2sql.prompt.zero_shot import Prompt
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +43,9 @@ ROUTER_CONFIGS: Dict[str, RouterConfig] = {
     "chatgpt": CHATGPT_CONFIG,
 }
 
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from text2sql.prompt.chat_prompt import ChatPrompt
+
 
 class OpenAIChatLLM:
     """Wrapper around OpenAI compatible chat completion endpoints."""
@@ -70,21 +74,32 @@ class OpenAIChatLLM:
         self.client = client.with_options(timeout=timeout)
         self.router = router
 
-    def generate(self, prompt: str, model: str, max_tokens: Optional[int] = None) -> LLMResult:
+    def generate(
+        self, prompt: Union[str, "ChatPrompt"], model: str, max_tokens: Optional[int] = None
+    ) -> LLMResult:
         """Call the configured router to generate SQL for ``prompt`` using ``model``."""
 
         LOGGER.debug("Calling router '%s' with model %s", self.router, model)
         LOGGER.debug("Model prompt: %s", prompt)
+
+        from text2sql.prompt.chat_prompt import ChatPrompt
+
+        if isinstance(prompt, ChatPrompt):
+            messages = prompt.as_messages()
+        elif isinstance(prompt, str):
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ]
+        else:  # pragma: no cover - defensive programming
+            raise TypeError(f"Unsupported prompt type: {type(prompt)}")
 
         try:
             completion: ChatCompletion = self.client.chat.completions.create(
                 model=model,
                 temperature=0,
                 max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt},
-                ],
+                messages=messages,
             )
         except OpenAIError as exc:  # pragma: no cover - network dependent
             LOGGER.exception("%s request failed: %s", self.router, exc)
@@ -121,7 +136,7 @@ class OpenAIChatLLM:
 
 
 def safe_generate(
-    prompt: str,
+    prompt: Prompt,
     model: str,
     router: str = "openrouter",
     api_key: Optional[str] = None,

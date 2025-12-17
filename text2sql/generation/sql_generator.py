@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Optional, Union
 
 from text2sql.models.router import OpenAIChatLLM
 from text2sql.util.dataset import SpiderDataset
@@ -20,7 +20,7 @@ class SQLGenerator:
         self,
         client: OpenAIChatLLM,
         model_name: str,
-        prompt_builder: Callable[[str, str, Optional[str]], str],
+        prompt_builder: Callable[[str, str, Optional[str]], Union[str, ChatPrompt]],
         request_delay: float = 0.0,
         max_tokens: Optional[int] = None,
     ) -> None:
@@ -45,7 +45,11 @@ class SQLGenerator:
             prompt = self.prompt_builder(example.question, schema, db_id=example.db_id)
 
             try:
-                LOGGER.info("Prompt sent to LLM: %s", prompt)
+                if isinstance(prompt, ChatPrompt):
+                    LOGGER.info("System prompt sent to LLM: %s", prompt.system_prompt)
+                    LOGGER.info("User prompt sent to LLM: %s", prompt.user_prompt)
+                else:
+                    LOGGER.info("Prompt sent to LLM: %s", prompt)
                 result = self.client.generate(
                     prompt=prompt, model=self.model_name, max_tokens=self.max_tokens
                 )

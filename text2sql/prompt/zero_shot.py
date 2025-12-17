@@ -1,16 +1,22 @@
 """Zero-shot prompt template for Text-to-SQL."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from textwrap import dedent
 
 ZERO_SHOT_TEMPLATE = dedent(
     """
     You are an expert SQL query developer.
+    Think through the schema and the question step by step, plan the query, and return only the final SQL answer.
+    """
+).strip()
+
+ZERO_SHOT_TEMPLATE = dedent(
+    """
     Given the following database schema:
     {schema}
     Write a correct SQL query to answer this question:
     Q: {question}
-    Only output the SQL query.
     """
 ).strip()
 
