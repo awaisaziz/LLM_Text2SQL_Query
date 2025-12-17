@@ -1,0 +1,11 @@
+{
+  "dataset_path": "./spider_data/",
+  "default_provider": "deepseek",
+  "default_model": "deepseek-chat",
+  "num_sample": 100,
+  "max_tokens": 8000,
+  "request_delay": 0.0,
+  "mode": "zero_shot",
+  "db_root": "spider_data/database",
+  "output_llm": "predicted/deepseek_chat_predicted.json"
+}

@@ -1,26 +1,28 @@
 # Text-to-SQL Baseline
 
-This repository contains a lightweight baseline pipeline for evaluating large language models on the [Spider](https://yale-lily.github.io/spider) Text-to-SQL benchmark using the OpenRouter API. The goal is to provide a clean, modular starting point that can be easily extended with few-shot prompting, schema formatting improvements, and caching.
+This repository contains a lightweight baseline pipeline for evaluating large language models on the [Spider](https://yale-lily.github.io/spider) Text-to-SQL benchmark using OpenAI-compatible providers. The goal is to provide a clean, modular starting point that can be easily extended with few-shot prompting, schema formatting improvements, and caching.
 
 ## Repository structure
 
 ```
 root
-├──text2sql/
-├──├── app.py              # Main entry point for running inference
-├──├── config.json         # Dataset and model configuration
-├──├── data_utils.py       # Spider dataset loading helpers
-├──├── evaluate.py         # Wrapper around the official Spider evaluation script
-├──├── llm.py              # OpenRouter API client
-└──├── prompt_template.py  # Prompt construction utilities
-├── outputs/            # Store the predictions.sql file predicted sql query from the LLM
-├── logs/               # Default directory for log output
-├── README.md           # This file
-├── .venv/              # Local Python virtual environment
-├── requirements.txt    # Python dependencies
-├── evaluation.py       # Official evaluation file from the Spider Github repo
-├── process_sql.py      # Official process_sql.py file from the Spider Github repo
-└── install.py          # Once install the package nltk module
+├── text2sql/
+│   ├── main.py                 # CLI entry point
+│   ├── config/                 # Configuration files and loader
+│   ├── generation/             # SQL generation pipeline
+│   ├── models/                 # Router definitions
+│   │   └── provider/           # Provider-specific router settings (deepseek, chatgpt, openrouter)
+│   ├── prompt/                 # Prompt engineering utilities (zero-shot)
+│   └── util/                   # Dataset loader, SQL cleaner, logging helpers
+├── output/                     # Run artifacts
+│   ├── log/                    # Log files
+│   └── predicted/              # Generated SQL predictions
+├── spider_data/                # Spider dataset root (dev.json, tables.json, database/)
+├── README.md                   # This file
+├── requirements.txt            # Python dependencies
+├── evaluation.py               # Official evaluation file from the Spider Github repo
+├── process_sql.py              # Official process_sql.py file from the Spider Github repo
+└── install.py                  # Once install the package nltk module
 ```
 
 The Spider dataset should be available locally under `./spider_data/` with the following expected files:
@@ -31,7 +33,7 @@ The Spider dataset should be available locally under `./spider_data/` with the f
 - `database/` (directory containing the SQLite databases)
 - `evaluate.py` (official Spider evaluation script)
 
-Update `config.json` if your dataset lives elsewhere.
+Update `text2sql/config/config.json` if your dataset lives elsewhere.
 
 ## Environment setup
 
@@ -42,27 +44,43 @@ python -m venv text2sql/.venv
 .venv\Scripts\activate
 ```
 
-Install dependencies:
+Install dependencies from the repository root:
 
 ```bash
-pip install -r text2sql/requirements.txt
+pip install -r requirements.txt
 ```
 
-Copy the example environment file and add your API key:
-
-```bash
-cp text2sql/.env.example text2sql/.env
-```
+Set the appropriate environment variables for your chosen provider (for example `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, or `OPENAI_API_KEY`). A `.env` file placed next to `text2sql/config/config.json` will also be loaded automatically.
 
 ## Running inference
 
-The baseline is invoked via `app.py`. A minimal example that runs the first 20 development examples using the DeepSeek open model is shown below:
+The pipeline is invoked via `text2sql/main.py`. A minimal example that runs the first 20 development examples using the DeepSeek provider is shown below:
 
 ```bash
-python -m text2sql.app --router deepseek --model deepseek-reasoner --num_samples 20 --out outputs/predictions.jsonl
+python -m text2sql.main --provider deepseek --model deepseek-chat --num_samples 20 --out predicted/deepseek_chat_predicted.sql
 ```
 
-The resulting JSONL file contains four fields per line: `question`, `gold_sql`, `pred_sql`, and `db_id`.
+The resulting file contains one SQL query per line. Paths provided via `--out` are resolved under the `output/` directory unless an absolute path is given.
+
+### Configuration
+
+Default values live in `text2sql/config/config.json`:
+
+```json
+{
+  "dataset_path": "./spider_data/",
+  "default_provider": "deepseek",
+  "default_model": "deepseek-chat",
+  "num_sample": 100,
+  "max_tokens": 8000,
+  "request_delay": 0.0,
+  "mode": "zero_shot",
+  "db_root": "spider_data/database",
+  "output_llm": "predicted/deepseek_chat_predicted.json"
+}
+```
+
+`dataset_path` should point to the folder containing `dev.json` and `tables.json`, while `output_llm` controls the default prediction filename (stored under `output/`).
 
 ## Evaluation
 

@@ -1,4 +1,4 @@
-"""Client wrappers for calling OpenRouter and DeepSeek models."""
+"""Client wrappers for calling OpenAI-compatible model providers."""
 from __future__ import annotations
 
 import logging
@@ -31,15 +31,15 @@ class RouterConfig:
     default_headers: Optional[Dict[str, str]] = None
 
 
+# Import provider configs after defining RouterConfig to avoid circular imports.
+from text2sql.models.provider.chatgpt import CHATGPT_CONFIG  # noqa: E402
+from text2sql.models.provider.deepseek import DEEPSEEK_CONFIG  # noqa: E402
+from text2sql.models.provider.openrouter import OPENROUTER_CONFIG  # noqa: E402
+
 ROUTER_CONFIGS: Dict[str, RouterConfig] = {
-    "openrouter": RouterConfig(
-        base_url="https://openrouter.ai/api/v1",
-        api_key_env="OPENROUTER_API_KEY",
-    ),
-    "deepseek": RouterConfig(
-        base_url="https://api.deepseek.com/v1",
-        api_key_env="DEEPSEEK_API_KEY",
-    ),
+    "openrouter": OPENROUTER_CONFIG,
+    "deepseek": DEEPSEEK_CONFIG,
+    "chatgpt": CHATGPT_CONFIG,
 }
 
 
@@ -70,7 +70,7 @@ class OpenAIChatLLM:
         self.client = client.with_options(timeout=timeout)
         self.router = router
 
-    def generate(self, prompt: str, model: str) -> LLMResult:
+    def generate(self, prompt: str, model: str, max_tokens: Optional[int] = None) -> LLMResult:
         """Call the configured router to generate SQL for ``prompt`` using ``model``."""
 
         LOGGER.debug("Calling router '%s' with model %s", self.router, model)
@@ -80,6 +80,7 @@ class OpenAIChatLLM:
             completion: ChatCompletion = self.client.chat.completions.create(
                 model=model,
                 temperature=0,
+                max_tokens=max_tokens,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt},
@@ -124,8 +125,9 @@ def safe_generate(
     model: str,
     router: str = "openrouter",
     api_key: Optional[str] = None,
+    max_tokens: Optional[int] = None,
 ) -> LLMResult:
     """Convenience function that wraps :class:`OpenAIChatLLM` with logging."""
 
     client = OpenAIChatLLM(router=router, api_key=api_key)
-    return client.generate(prompt=prompt, model=model)
+    return client.generate(prompt=prompt, model=model, max_tokens=max_tokens)
