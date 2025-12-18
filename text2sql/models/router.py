@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import Any, Dict, Mapping, Optional, Union
 
 from openai import OpenAI, OpenAIError
 from openai.types.chat import ChatCompletion
@@ -42,10 +42,7 @@ ROUTER_CONFIGS: Dict[str, RouterConfig] = {
     "chatgpt": CHATGPT_CONFIG,
 }
 
-if TYPE_CHECKING:  # pragma: no cover - type checking only
-    from text2sql.prompt.chat_prompt import ChatPrompt
-
-Prompt = Union[str, "ChatPrompt"]
+Prompt = Union[str, Mapping[str, str]]
 
 
 class OpenAIChatLLM:
@@ -75,18 +72,21 @@ class OpenAIChatLLM:
         self.client = client.with_options(timeout=timeout)
         self.router = router
 
-    def generate(
-        self, prompt: Union[str, "ChatPrompt"], model: str, max_tokens: Optional[int] = None
-    ) -> LLMResult:
+    def generate(self, prompt: Prompt, model: str, max_tokens: Optional[int] = None) -> LLMResult:
         """Call the configured router to generate SQL for ``prompt`` using ``model``."""
 
         LOGGER.debug("Calling router '%s' with model %s", self.router, model)
         LOGGER.debug("Model prompt: %s", prompt)
 
-        from text2sql.prompt.chat_prompt import ChatPrompt
-
-        if isinstance(prompt, ChatPrompt):
-            messages = prompt.as_messages()
+        if isinstance(prompt, Mapping):
+            system_prompt = prompt.get("system")
+            user_prompt = prompt.get("user")
+            if not system_prompt or not user_prompt:
+                raise ValueError("Prompt mapping must include 'system' and 'user' keys.")
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
         elif isinstance(prompt, str):
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},

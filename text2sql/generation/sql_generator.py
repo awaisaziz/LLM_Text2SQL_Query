@@ -5,15 +5,14 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional, Union
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from text2sql.generation.execution import CandidateSQL, execute_sql, majority_vote, resolve_db_path
 from text2sql.generation.rag_pipeline import Example, format_schema, generate_sql_candidates, retrieve_similar_examples
-from text2sql.models.router import OpenAIChatLLM
-from text2sql.prompt.chat_prompt import ChatPrompt
+from text2sql.models.router import OpenAIChatLLM, Prompt
 from text2sql.prompt.prompt_builder import build_cot_prompt
 from text2sql.util.dataset import SpiderDataset
 from text2sql.util.sql_cleaner import extract_sql_query
@@ -121,7 +120,7 @@ class SQLGenerator:
         self,
         client: OpenAIChatLLM,
         model_name: str,
-        prompt_builder: Callable[[str, str, Optional[str]], Union[str, ChatPrompt]],
+        prompt_builder: Callable[[str, str, Optional[str]], Prompt],
         request_delay: float = 0.0,
         max_tokens: Optional[int] = None,
     ) -> None:
@@ -147,9 +146,9 @@ class SQLGenerator:
             prompt = self.prompt_builder(example.question, schema, db_id=example.db_id)
 
             try:
-                if isinstance(prompt, ChatPrompt):
-                    LOGGER.info("System prompt sent to LLM: %s", prompt.system_prompt)
-                    LOGGER.info("User prompt sent to LLM: %s", prompt.user_prompt)
+                if isinstance(prompt, Mapping):
+                    LOGGER.info("System prompt sent to LLM: %s", prompt.get("system"))
+                    LOGGER.info("User prompt sent to LLM: %s", prompt.get("user"))
                 else:
                     LOGGER.info("Prompt sent to LLM: %s", prompt)
                 result = self.client.generate(

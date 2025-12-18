@@ -8,7 +8,7 @@ from typing import Any, List, Sequence
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from text2sql.models.router import OpenAIChatLLM
+from text2sql.models.router import OpenAIChatLLM, Prompt
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def retrieve_similar_examples(
 
 
 def generate_sql_candidates(
-    prompt: str,
+    prompt: Prompt,
     n: int,
     provider: str,
     model: str,
