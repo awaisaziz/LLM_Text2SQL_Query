@@ -28,7 +28,7 @@ def build_cot_prompt(
     schema: str,
     user_question: str,
     retrieved_examples: Iterable["Example"],
-    prompt_technique: str = "cot",
+    mode: str = "cot",
 ) -> str:
     """Construct a chain-of-thought prompt using retrieved examples."""
 
@@ -37,7 +37,7 @@ def build_cot_prompt(
     )
     reasoning_prefix = (
         "Follow chain-of-thought reasoning before writing the final SQL."
-        if prompt_technique.lower() == "cot"
+        if mode.lower() == "cot"
         else ""
     )
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 from text2sql.generation.execution import CandidateSQL, execute_sql, majority_vote, resolve_db_path
 from text2sql.generation.rag_pipeline import Example, format_schema, generate_sql_candidates, retrieve_similar_examples
@@ -55,7 +56,6 @@ def generate_cot_dataset_predictions(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     dataset_path = Path(config["dataset_path"])
-    rag_config: Mapping[str, Any] = config.get("rag", {}) or {}
     provider = config.get("default_provider")
     model_name = config.get("default_model")
     if not provider or not model_name:
@@ -64,40 +64,41 @@ def generate_cot_dataset_predictions(
     tables_metadata = load_tables_metadata(dataset_path, config.get("tables_filename", "tables.json"))
     retrieval_examples = load_retrieval_examples(
         dataset_path,
-        int(rag_config.get("num_retrieve", 200)),
-        filename=rag_config.get("retrieval_examples_filename", "test.json"),
+        int(config["rag"].get("num_retrieve", 200)),
+        filename=config["rag"].get("retrieval_examples_filename", "test.json"),
     )
 
-    embedding_model = rag_config.get("embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2")
+    embedding_model = config["rag"].get("embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2")
     LOGGER.info("Using embedding model '%s' for retrieval", embedding_model)
     embedder = SentenceTransformer(embedding_model)
     example_embeddings = embedder.encode([ex.question for ex in retrieval_examples])
 
     predictions: list[str] = []
-    for example in dataset.iter_examples(limit=num_samples):
+    examples_iter = dataset.iter_examples(limit=num_samples)
+    total_examples = num_samples if num_samples is not None else len(dataset)
+    for example in tqdm(examples_iter, total=total_examples, desc="Generating SQL (RAG)"):
         retrieved = retrieve_similar_examples(
             example.question,
             retrieval_examples,
-            k=int(rag_config.get("k", 4)),
+            k=int(config["rag"].get("k", 4)),
             embedding_model_name=embedding_model,
             embedder=embedder,
             example_embeddings=example_embeddings,
         )
-        LOGGER.info("Retrieved %d examples for question: %s", len(retrieved), example.question)
+        # LOGGER.info("Retrieved %d examples for question: %s", len(retrieved), example.question)
 
         schema = format_schema(example.db_id, tables_metadata)
         prompt = build_cot_prompt(
             schema,
             example.question,
             retrieved,
-            prompt_technique=rag_config.get("mode", "cot"),
+            mode=str(config.get("mode", "cot")),
         )
         sql_candidates = generate_sql_candidates(
             prompt,
-            n=int(rag_config.get("n", 1)),
+            n=int(config["rag"].get("n", 5)),
             provider=str(provider),
             model=str(model_name),
-            temperature=float(rag_config.get("temperature", 0.0)),
         )
         LOGGER.info("Generated %d SQL candidates for question: %s", len(sql_candidates), example.question)
         LOGGER.info("SQL Candidates: %s", sql_candidates)
@@ -140,7 +141,8 @@ class SQLGenerator:
 
         predictions: list[str] = []
         iterator: Iterable = dataset.iter_examples(limit=num_samples)
-        for example in iterator:
+        total_examples = num_samples if num_samples is not None else len(dataset)
+        for example in tqdm(iterator, total=total_examples, desc="Generating SQL"):
             schema = dataset.get_schema(example.db_id)
             prompt = self.prompt_builder(example.question, schema, db_id=example.db_id)
 

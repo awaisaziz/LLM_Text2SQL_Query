@@ -90,5 +90,4 @@ def load_config(config_path: str | Path | None = None, cli_args: Any | None = No
                 final_value = Path(override_value)
             _apply_override(config, key_path, final_value)
 
-    config["rag"]["prompt_technique"] = (config.get("mode") or "cot").lower()
     return config
