@@ -13,12 +13,13 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from text2sql.config.rag_config import DEFAULT_CONFIG_PATH, RAGConfig, load_rag_config
+from text2sql.config import DEFAULT_CONFIG_PATH, load_config
+from text2sql.models.router import OpenAIChatLLM
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,8 +58,8 @@ def load_examples(dataset_path: Path, num_retrieve: int, filename: str = "dev.js
     return examples
 
 
-def _load_tables_metadata(dataset_path: Path) -> Dict[str, Any]:
-    tables_path = dataset_path / "tables.json"
+def _load_tables_metadata(dataset_path: Path, tables_filename: str = "tables.json") -> Dict[str, Any]:
+    tables_path = dataset_path / tables_filename
     if not tables_path.exists():
         raise FileNotFoundError(f"Could not find tables.json at {tables_path}")
     return {item["db_id"]: item for item in json.loads(tables_path.read_text())}
@@ -156,13 +157,15 @@ def generate_sql_candidates(
 
     candidates: list[str] = []
     generator_cache = None
+    router_client: OpenAIChatLLM | None = None
     for _ in range(n):
         if provider == "ollama":
             sql = _generate_with_ollama(prompt, model, temperature)
         elif provider == "transformers":
             sql, generator_cache = _generate_with_transformers(prompt, model, temperature, generator_cache)
         else:
-            raise ValueError(f"Unsupported provider '{provider}'. Use 'ollama' or 'transformers'.")
+            router_client = router_client or OpenAIChatLLM(router=provider)
+            sql = router_client.generate(prompt=prompt, model=model).sql
 
         candidates.append(sql)
     return candidates
@@ -217,35 +220,48 @@ def majority_vote(candidates: Iterable[CandidateSQL]) -> tuple[str, list[Candida
 def run_pipeline(
     user_question: str,
     db_id: str,
-    config: RAGConfig,
+    config: Mapping[str, Any],
     examples: list[Example] | None = None,
     tables_metadata: Dict[str, Any] | None = None,
     embedder: SentenceTransformer | None = None,
     example_embeddings: list | None = None,
 ) -> tuple[str, list[CandidateSQL]]:
-    tables_metadata = tables_metadata or _load_tables_metadata(config.dataset_path)
-    examples = examples or load_examples(config.dataset_path, config.num_retrieve)
+    rag_config = config.get("rag", {})
+    dataset_path: Path = config["dataset_path"]
+    db_root: Path = config["db_root"]
+    provider = config.get("default_provider")
+    model_name = config.get("default_model")
+    if not provider or not model_name:
+        raise ValueError("Both default_provider and default_model must be set in the config for RAG mode.")
+
+    tables_filename = config.get("tables_filename", "tables.json")
+    retrieval_examples_filename = rag_config.get("retrieval_examples_filename", "test.json")
+    # retrieval_tables_filename = rag_config.get("retrieval_tables_filename", "test_tables.json")
+
+    tables_metadata = tables_metadata or _load_tables_metadata(dataset_path, tables_filename)
+    # _ = _load_tables_metadata(dataset_path, retrieval_tables_filename)
+    examples = examples or load_examples(dataset_path, rag_config.get("num_retrieve", 200), filename=retrieval_examples_filename)
 
     retrieved = retrieve_similar_examples(
         user_question,
         examples,
-        k=config.k,
-        embedding_model_name=config.embedding_model_name,
+        k=rag_config.get("k", 4),
+        embedding_model_name=rag_config.get("embedding_model_name", ""),
         embedder=embedder,
         example_embeddings=example_embeddings,
     )
 
     schema = _format_schema(db_id, tables_metadata)
-    prompt = build_prompt(schema, user_question, retrieved, prompt_technique=config.prompt_technique)
+    prompt = build_prompt(schema, user_question, retrieved, prompt_technique=rag_config.get("prompt_technique", "cot"))
     sql_candidates = generate_sql_candidates(
         prompt,
-        n=config.n,
-        provider=config.llm_provider,
-        model=config.llm_model,
-        temperature=config.temperature,
+        n=rag_config.get("n", 1),
+        provider=provider,
+        model=model_name,
+        temperature=rag_config.get("temperature", 0.0),
     )
 
-    db_path = _resolve_db_path(config.db_root, db_id)
+    db_path = _resolve_db_path(db_root, db_id)
     executed_candidates = [execute_sql(sql, db_path) for sql in sql_candidates]
     final_sql, candidates_with_votes = majority_vote(executed_candidates)
     return final_sql, candidates_with_votes
@@ -253,16 +269,24 @@ def run_pipeline(
 
 def generate_dataset_rag_predictions(
     dataset: Iterable[Example],
-    config: RAGConfig,
+    config: Mapping[str, Any],
     output_path: Path,
     num_samples: int | None = None,
 ) -> list[str]:
     """Run the RAG pipeline across a dataset and save predictions."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tables_metadata = _load_tables_metadata(config.dataset_path)
-    retrieval_examples = load_examples(config.dataset_path, config.num_retrieve)
-    embedder = SentenceTransformer(config.embedding_model_name)
+    dataset_path: Path = config["dataset_path"]
+    rag_config = config.get("rag", {})
+    tables_filename = config.get("tables_filename", "tables.json")
+    retrieval_examples_filename = rag_config.get("retrieval_examples_filename", "test.json")
+    # retrieval_tables_filename = rag_config.get("retrieval_tables_filename", "test_tables.json")
+
+    tables_metadata = _load_tables_metadata(dataset_path, tables_filename)
+    # _ = _load_tables_metadata(dataset_path, retrieval_tables_filename)
+    retrieval_examples = load_examples(dataset_path, rag_config.get("num_retrieve", 200), filename=retrieval_examples_filename)
+    embedding_model = rag_config.get("embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2")
+    embedder = SentenceTransformer(embedding_model)
     example_embeddings = embedder.encode([ex.question for ex in retrieval_examples])
 
     predictions: list[str] = []
@@ -296,39 +320,13 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CONFIG_PATH,
         help="Path to JSON config file (defaults to config.json).",
     )
-    parser.add_argument("--provider", choices=["ollama", "transformers"], help="LLM provider override.")
-    parser.add_argument("--model", help="Model name override for the provider.")
-    parser.add_argument("--prompt_technique", help="Prompting technique label (e.g., cot, direct).")
-    parser.add_argument("--temperature", type=float, help="Sampling temperature override.")
-    parser.add_argument("--n", type=int, help="Number of SQL generations for self-consistency.")
-    parser.add_argument("--k", type=int, help="Number of retrieved examples.")
-    parser.add_argument("--num_retrieve", type=int, help="Number of candidate examples to search.")
-    parser.add_argument("--embedding_model", help="Sentence transformer model to use for retrieval.")
     return parser.parse_args()
 
 
 def main() -> None:  # pragma: no cover - CLI glue
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
-    config = load_rag_config(args.config)
-
-    if args.provider:
-        config.llm_provider = args.provider
-    if args.model:
-        config.llm_model = args.model
-    if args.prompt_technique:
-        config.prompt_technique = args.prompt_technique
-    if args.temperature is not None:
-        config.temperature = args.temperature
-    if args.n is not None:
-        config.n = args.n
-    if args.k is not None:
-        config.k = args.k
-    if args.num_retrieve is not None:
-        config.num_retrieve = args.num_retrieve
-    if args.embedding_model:
-        config.embedding_model_name = args.embedding_model
-
+    config = load_config(args.config)
     final_sql, candidates = run_pipeline(args.question, args.db_id, config)
     print("Final SQL:", final_sql)
     print("All candidates and execution results:")

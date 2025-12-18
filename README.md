@@ -8,7 +8,7 @@ This repository contains a lightweight baseline pipeline for evaluating large la
 root
 ├── text2sql/
 │   ├── main.py                 # CLI entry point
-│   ├── config/                 # Configuration files and loader
+│   ├── config/                 # Configuration loader and defaults
 │   ├── generation/             # SQL generation pipeline
 │   ├── models/                 # Router definitions
 │   │   └── provider/           # Provider-specific router settings (deepseek, chatgpt, openrouter)
@@ -50,7 +50,7 @@ Install dependencies from the repository root:
 pip install -r requirements.txt
 ```
 
-Set the appropriate environment variables for your chosen provider (for example `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, or `OPENAI_API_KEY`). A `.env` file placed next to `text2sql/config/config.json` will also be loaded automatically.
+Set the appropriate environment variables for your chosen provider (for example `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, or `OPENAI_API_KEY`). A `.env` file placed alongside `text2sql/config/config.json` will also be loaded automatically.
 
 ## Running inference
 
@@ -64,7 +64,7 @@ The resulting file contains one SQL query per line. Paths provided via `--out` a
 
 ### Configuration
 
-Default values live in `text2sql/config/config.json`:
+Default values live in `text2sql/config/config.json` and are loaded via `text2sql.config`:
 
 ```json
 {
@@ -76,32 +76,32 @@ Default values live in `text2sql/config/config.json`:
   "request_delay": 0.0,
   "mode": "zero_shot",
   "db_root": "spider_data/database",
-  "output_llm": "predicted/deepseek_chat_predicted.json"
+  "output_llm": "predicted/deepseek_chat_predicted.json",
+  "tables_filename": "tables.json",
+  "rag": {
+    "num_retrieve": 200,
+    "k": 4,
+    "n": 5,
+    "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "retrieval_examples_filename": "test.json",
+    "retrieval_tables_filename": "test_tables.json"
+  }
 }
 ```
 
-`dataset_path` should point to the folder containing `dev.json` and `tables.json`, while `output_llm` controls the default prediction filename (stored under `output/`).
+`dataset_path` should point to the folder containing `dev.json` and `tables.json`, while `output_llm` controls the default prediction filename (stored under `output/`). Retrieval pulls similar examples from `test.json`/`test_tables.json` while generation iterates through `dev.json`/`tables.json`.
+
+All dataset, model, and RAG parameters are read from this JSON file. Command-line arguments can override selected values at runtime: `--provider`, `--model`, `--num_samples`, `--out`, `--mode`, `--k`, `--n`, and `--num_retrieve`.
 
 ## Retrieval-augmented Text-to-SQL (inference-only)
 
-The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. Configuration lives alongside the existing settings in `text2sql/config/config.json` under the `rag` key:
-
-```json
-"rag": {
-  "num_retrieve": 200,
-  "k": 4,
-  "n": 5,
-  "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2"
-}
-```
-
-Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
+The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. All retrieval settings live in `text2sql/config/config.json` under the `rag` key. Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
 
 ```bash
 python -m text2sql.main \
   --provider deepseek \
   --model deepseek-chat \
-  --num_samples 20 \
+  --num_samples 2 \
   --out predicted/deepseek_chat_predicted.sql \
   --mode cot \
   --k 3 \
@@ -109,7 +109,7 @@ python -m text2sql.main \
   --num_retrieve 200
 ```
 
-This command will, for each selected example, retrieve the top-`k` similar questions (and SQL) from `dev.json`, build the prompt with the selected `mode` (e.g., `cot` for chain-of-thought), generate `n` SQL candidates, execute them, and return the execution-voted SQL. Additional overrides include `--embedding_model` and `--temperature` for the retrieval encoder and generation sampling temperature. Provider/model defaults come from `default_provider` and `default_model`. The pipeline uses only open-source libraries and models: sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and configurable open-source LLM providers (Ollama or local `transformers`).
+This command will, for each selected example from `dev.json`, retrieve the top-`k` similar questions (and SQL) from `test.json`, build the prompt with the selected `mode` (e.g., `cot` for chain-of-thought), generate `n` SQL candidates, execute them, and return the execution-voted SQL. Provider/model defaults come from `default_provider` and `default_model`. The pipeline uses sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and the configured chat provider for generation.
 
 ## Evaluation
 

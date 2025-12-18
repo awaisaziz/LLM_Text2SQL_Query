@@ -1,50 +1,97 @@
-"""Configuration loader for the Text2SQL pipeline."""
+"""Centralized configuration loader for the Text-to-SQL pipeline."""
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-
-
-@dataclass
-class AppConfig:
-    dataset_path: Path
-    default_provider: str
-    default_model: str
-    num_sample: int
-    max_tokens: int
-    request_delay: float
-    mode: str
-    db_root: Path
-    output_llm: Path
-
+from typing import Any, MutableMapping, Sequence
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
+_OVERRIDE_MAP: dict[str, Sequence[str]] = {
+    "provider": ("default_provider",),
+    "model": ("default_model",),
+    "num_samples": ("num_sample",),
+    "out": ("output_llm",),
+    "mode": ("mode",),
+    "k": ("rag", "k"),
+    "n": ("rag", "n"),
+    "num_retrieve": ("rag", "num_retrieve"),
+}
 
-def load_config(config_path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
-    path = Path(config_path).resolve()
-    config_data = json.loads(path.read_text())
-    dataset_path = Path(config_data.get("dataset_path", "./spider_data/")).expanduser()
-    if not dataset_path.is_absolute():
-        dataset_path = (Path.cwd() / dataset_path).resolve()
 
-    db_root = Path(config_data.get("db_root", "spider_data/database")).expanduser()
-    if not db_root.is_absolute():
-        db_root = (Path.cwd() / db_root).resolve()
+def _resolve_path(value: str | Path, base: Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (base / path).resolve()
 
-    output_path = Path(
-        config_data.get("output_llm", "output/predicted/deepseek_chat_predicted.json")
-    )
 
-    return AppConfig(
-        dataset_path=dataset_path,
-        default_provider=config_data.get("default_provider", "deepseek"),
-        default_model=config_data.get("default_model", "deepseek-chat"),
-        num_sample=int(config_data.get("num_sample", 100)),
-        max_tokens=int(config_data.get("max_tokens", 8000)),
-        request_delay=float(config_data.get("request_delay", 0.0)),
-        mode=config_data.get("mode", "zero_shot"),
-        db_root=db_root,
-        output_llm=output_path,
-    )
+def _apply_override(config: MutableMapping[str, Any], key_path: Sequence[str], value: Any) -> None:
+    target = config
+    for key in key_path[:-1]:
+        nested = target.get(key)
+        if not isinstance(nested, MutableMapping):
+            nested = {}
+            target[key] = nested
+        target = nested  # type: ignore[assignment]
+    target[key_path[-1]] = value
+
+
+def load_config(config_path: str | Path | None = None, cli_args: Any | None = None) -> dict[str, Any]:
+    """Load configuration from JSON and apply CLI overrides.
+
+    All dataset, model, and RAG parameters originate from the JSON file. Command-line
+    arguments listed in ``_OVERRIDE_MAP`` are applied on top to support run-time tweaks.
+    """
+
+    path = Path(config_path or DEFAULT_CONFIG_PATH).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    data = json.loads(path.read_text())
+    base_dir = path.parent
+
+    rag_data = data.get("rag", {})
+
+    dataset_path = _resolve_path(data.get("dataset_path", "./spider_data/"), base_dir)
+    db_root_default = dataset_path / "database"
+    db_root = _resolve_path(data.get("db_root", db_root_default), base_dir)
+
+    config: dict[str, Any] = {
+        "dataset_path": dataset_path,
+        "tables_filename": data.get("tables_filename", "tables.json"),
+        "default_provider": data.get("default_provider", "deepseek"),
+        "default_model": data.get("default_model", "deepseek-chat"),
+        "num_sample": int(data.get("num_sample", 100)),
+        "max_tokens": int(data.get("max_tokens", 8000)),
+        "request_delay": float(data.get("request_delay", 0.0)),
+        "mode": data.get("mode", "zero_shot"),
+        "db_root": db_root,
+        "output_llm": Path(data.get("output_llm", "predicted/deepseek_chat_predicted.json")),
+        "rag": {
+            "num_retrieve": int(rag_data.get("num_retrieve", 200)),
+            "k": int(rag_data.get("k", 4)),
+            "n": int(rag_data.get("n", 5)),
+            "embedding_model_name": rag_data.get(
+                "embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2"
+            ),
+            "temperature": float(rag_data.get("temperature", 0.2)),
+            "retrieval_examples_filename": rag_data.get("retrieval_examples_filename", "test.json"),
+            "retrieval_tables_filename": rag_data.get("retrieval_tables_filename", "test_tables.json"),
+        },
+    }
+    config["rag"]["prompt_technique"] = config["mode"]
+
+    if cli_args is not None:
+        for arg_name, key_path in _OVERRIDE_MAP.items():
+            override_value = getattr(cli_args, arg_name, None)
+            if override_value is None:
+                continue
+
+            final_value: Any = override_value
+            if key_path[-1] in {"num_sample", "max_tokens", "num_retrieve", "k", "n"}:
+                final_value = int(override_value)
+            elif key_path[-1] in {"output_llm"}:
+                final_value = Path(override_value)
+            _apply_override(config, key_path, final_value)
+
+    config["rag"]["prompt_technique"] = (config.get("mode") or "cot").lower()
+    return config
