@@ -60,7 +60,8 @@ def build_cot_prompt(
     - PROHIBITED: "SELECT count(*) AS club_count FROM club"
     4. NEVER add column aliases - preserve original column names from the schema
     5. Study the provided similar examples to understand patterns
-    6. Generate ONLY the SQL query - no explanations, no markdown, no additional text
+    6. ALWAYS think step-by-step before writing SQL
+    7. Generate ONLY the SQL query - no explanations, no markdown, no additional text
     """.strip()
 
     examples_block = "\n\n".join(
