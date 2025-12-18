@@ -95,7 +95,12 @@ def main() -> None:
         )
         num_samples = args.num_samples if args.num_samples is not None else config.get("num_sample")
         start_time = perf_counter()
-        generate_cot_dataset_predictions(dataset, config, predictions_path, num_samples=num_samples)
+        generate_cot_dataset_predictions(
+            dataset,
+            config,
+            predictions_path,
+            num_samples=num_samples,
+            max_tokens=config.get("max_tokens", 8000))
         elapsed = perf_counter() - start_time
     else:
         model_name = config.get("default_model")

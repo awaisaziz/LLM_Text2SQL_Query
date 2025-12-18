@@ -60,6 +60,7 @@ def generate_sql_candidates(
     n: int,
     provider: str,
     model: str,
+    max_tokens: int | None = None,
 ) -> list[str]:
     """Generate ``n`` SQL candidates using the configured provider."""
 
@@ -67,7 +68,7 @@ def generate_sql_candidates(
     router_client: OpenAIChatLLM | None = None
     for _ in range(n):
         router_client = router_client or OpenAIChatLLM(router=provider)
-        sql = router_client.generate(prompt=prompt, model=model).sql
+        sql = router_client.generate(prompt=prompt, model=model, max_tokens=max_tokens).sql
 
         candidates.append(sql)
     return candidates

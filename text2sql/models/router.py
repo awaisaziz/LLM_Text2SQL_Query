@@ -78,34 +78,24 @@ class OpenAIChatLLM:
         LOGGER.debug("Calling router '%s' with model %s", self.router, model)
         LOGGER.debug("Model prompt: %s", prompt)
 
-        if isinstance(prompt, Mapping):
-            system_prompt = prompt.get("system")
-            user_prompt = prompt.get("user")
-            if not system_prompt or not user_prompt:
-                raise ValueError("Prompt mapping must include 'system' and 'user' keys.")
-            messages = [
+        system_prompt = prompt.get("system")
+        user_prompt = prompt.get("user")
+        messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
-            ]
-        elif isinstance(prompt, str):
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt},
-            ]
-        else:  # pragma: no cover - defensive programming
-            raise TypeError(f"Unsupported prompt type: {type(prompt)}")
-
+        ]
+        
         try:
             completion: ChatCompletion = self.client.chat.completions.create(
                 model=model,
-                temperature=0,
                 max_tokens=max_tokens,
                 messages=messages,
             )
         except OpenAIError as exc:  # pragma: no cover - network dependent
             LOGGER.exception("%s request failed: %s", self.router, exc)
             raise LLMError(f"{self.router} request failed") from exc
-
+        LOGGER.debug("%s response: %s", self.router, completion)
+        
         sql = self._extract_sql(completion)
         LOGGER.debug("Received SQL: %s", sql)
         return LLMResult(sql=sql, raw=completion.model_dump())

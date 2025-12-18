@@ -50,6 +50,7 @@ def generate_cot_dataset_predictions(
     config: Mapping[str, Any],
     output_path: Path,
     num_samples: Optional[int] = None,
+    max_tokens: Optional[int] = None,
 ) -> list[str]:
     """Run retrieval-augmented generation with execution voting."""
 
@@ -98,6 +99,7 @@ def generate_cot_dataset_predictions(
             n=int(config["rag"].get("n", 5)),
             provider=str(provider),
             model=str(model_name),
+            max_tokens=max_tokens,
         )
         LOGGER.info("Generated %d SQL candidates for question: %s", len(sql_candidates), example.question)
         LOGGER.info("SQL Candidates: %s", sql_candidates)
