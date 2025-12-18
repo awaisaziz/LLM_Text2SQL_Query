@@ -7,12 +7,12 @@
   "request_delay": 0.0,
   "mode": "zero_shot",
   "db_root": "spider_data/database",
-  "output_llm": "predicted/deepseek_chat_predicted.json",
+  "output_llm": "predicted/deepseek_chat_k=5_n=7_predicted.json",
   "tables_filename": "tables.json",
   "rag": {
-    "num_retrieve": 200,
-    "k": 4,
-    "n": 5,
+    "num_retrieve": 1000,
+    "k": 5,
+    "n": 7,
     "embedding_model_name": "thenlper/gte-large",
     "retrieval_examples_filename": "test.json"
   }
