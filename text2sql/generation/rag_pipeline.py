@@ -40,12 +40,13 @@ def retrieve_similar_examples(
     k: int,
     embedding_model_name: str,
     embedder: SentenceTransformer | None = None,
-    example_embeddings: list | None = None,
+    example_embeddings: Sequence | None = None,
 ) -> list[Example]:
     """Retrieve the top-k similar examples based on cosine similarity."""
 
     embedder = embedder or SentenceTransformer(embedding_model_name)
-    example_embeddings = example_embeddings or embedder.encode([ex.question for ex in examples])
+    if example_embeddings is None:
+        example_embeddings = embedder.encode([ex.question for ex in examples])
     query_embedding = embedder.encode([question])
 
     scores = cosine_similarity(query_embedding, example_embeddings)[0]

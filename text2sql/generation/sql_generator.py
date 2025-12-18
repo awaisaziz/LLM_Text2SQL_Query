@@ -86,6 +86,7 @@ def generate_cot_dataset_predictions(
             example_embeddings=example_embeddings,
         )
         # LOGGER.info("Retrieved %d examples for question: %s", len(retrieved), example.question)
+        LOGGER.info("Retrieved examples: %s", [ex.sql for ex in retrieved])
 
         schema = format_schema(example.db_id, tables_metadata)
         prompt = build_cot_prompt(

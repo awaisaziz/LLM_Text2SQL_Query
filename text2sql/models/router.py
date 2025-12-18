@@ -84,7 +84,8 @@ class OpenAIChatLLM:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
         ]
-        
+        LOGGER.info("Messages sent to LLM: %s", user_prompt)
+
         try:
             completion: ChatCompletion = self.client.chat.completions.create(
                 model=model,
