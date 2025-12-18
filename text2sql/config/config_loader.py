@@ -35,6 +35,39 @@ def _apply_override(config: MutableMapping[str, Any], key_path: Sequence[str], v
     target[key_path[-1]] = value
 
 
+def _resolve_dataset_path(raw_value: str | Path, base: Path) -> Path:
+    """Resolve the dataset path, preferring an existing folder with Spider files.
+
+    The JSON configuration is stored in ``text2sql/config/``, so resolving relative
+    paths against ``base`` points to ``text2sql/config/...`` by default. When users
+    place the Spider data next to the repository root (e.g., ``spider_data``) and
+    reference it with a relative path, that naive resolution fails. To make the
+    configuration robust, we try both the config directory and the current working
+    directory before giving up.
+    """
+
+    path = Path(raw_value).expanduser()
+    candidates: list[Path] = []
+
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.append((base / path).resolve())
+        cwd_candidate = (Path.cwd() / path).resolve()
+        if cwd_candidate not in candidates:
+            candidates.append(cwd_candidate)
+
+    for candidate in candidates:
+        dev_file = candidate / "dev.json"
+        tables_file = candidate / "tables.json"
+        if dev_file.exists() and tables_file.exists():
+            return candidate
+
+    # Fall back to the first candidate to preserve existing behaviour; downstream
+    # validation will still raise a clear error if the files are missing.
+    return candidates[0]
+
+
 def load_config(config_path: str | Path | None = None, cli_args: Any | None = None) -> dict[str, Any]:
     """Load configuration from JSON and apply CLI overrides.
 
@@ -51,7 +84,7 @@ def load_config(config_path: str | Path | None = None, cli_args: Any | None = No
 
     rag_data = data.get("rag", {})
 
-    dataset_path = _resolve_path(data.get("dataset_path", "./spider_data/"), base_dir)
+    dataset_path = _resolve_dataset_path(data.get("dataset_path", "./spider_data/"), base_dir)
     db_root_default = dataset_path / "database"
     db_root = _resolve_path(data.get("db_root", db_root_default), base_dir)
 
