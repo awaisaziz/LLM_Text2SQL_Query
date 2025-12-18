@@ -10,9 +10,11 @@ root
 │   ├── main.py                 # CLI entry point
 │   ├── config/                 # Configuration loader and defaults
 │   ├── generation/             # SQL generation pipeline
+│   │   ├── execution.py        # SQL execution + majority voting helpers
+│   │   └── rag_pipeline.py     # Retrieval and SQL candidate generation utilities
 │   ├── models/                 # Router definitions
 │   │   └── provider/           # Provider-specific router settings (deepseek, chatgpt, openrouter)
-│   ├── prompt/                 # Prompt engineering utilities (zero-shot)
+│   ├── prompt/                 # Prompt builder utilities (zero-shot + COT)
 │   └── util/                   # Dataset loader, SQL cleaner, logging helpers
 ├── output/                     # Run artifacts
 │   ├── log/                    # Log files
@@ -109,7 +111,15 @@ python -m text2sql.main \
   --num_retrieve 200
 ```
 
-This command will, for each selected example from `dev.json`, retrieve the top-`k` similar questions (and SQL) from `test.json`, build the prompt with the selected `mode` (e.g., `cot` for chain-of-thought), generate `n` SQL candidates, execute them, and return the execution-voted SQL. Provider/model defaults come from `default_provider` and `default_model`. The pipeline uses sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and the configured chat provider for generation.
+When `--mode cot` (or `mode` in the config) is set, `text2sql/generation/sql_generator.py` orchestrates the following steps:
+
+1. Load `dev.json`/`tables.json` to obtain questions and schema metadata for retrieval and schema formatting.
+2. Call `text2sql/generation/rag_pipeline.py` to embed candidate questions and retrieve the top-`k` examples for each target question.
+3. Build a chain-of-thought prompt with `text2sql/prompt/prompt_builder.py`.
+4. Generate `n` SQL candidates with the configured provider (DeepSeek, ChatGPT, or OpenRouter-compatible models).
+5. Execute candidates and perform majority voting in `text2sql/generation/execution.py` to pick the final SQL string.
+
+The pipeline uses sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and the configured chat provider for generation. Provider/model defaults come from `default_provider` and `default_model`.
 
 ## Evaluation
 

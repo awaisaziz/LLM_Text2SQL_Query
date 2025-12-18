@@ -73,12 +73,9 @@ def load_config(config_path: str | Path | None = None, cli_args: Any | None = No
             "embedding_model_name": rag_data.get(
                 "embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2"
             ),
-            "temperature": float(rag_data.get("temperature", 0.2)),
             "retrieval_examples_filename": rag_data.get("retrieval_examples_filename", "test.json"),
-            "retrieval_tables_filename": rag_data.get("retrieval_tables_filename", "test_tables.json"),
         },
     }
-    config["rag"]["prompt_technique"] = config["mode"]
 
     if cli_args is not None:
         for arg_name, key_path in _OVERRIDE_MAP.items():

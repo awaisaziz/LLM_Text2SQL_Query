@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from openai import OpenAI, OpenAIError
 from openai.types.chat import ChatCompletion
-from text2sql.prompt.zero_shot import Prompt
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +44,8 @@ ROUTER_CONFIGS: Dict[str, RouterConfig] = {
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from text2sql.prompt.chat_prompt import ChatPrompt
+
+Prompt = Union[str, "ChatPrompt"]
 
 
 class OpenAIChatLLM:

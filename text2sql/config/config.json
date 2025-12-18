@@ -14,7 +14,6 @@
     "k": 4,
     "n": 5,
     "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
-    "retrieval_examples_filename": "test.json",
-    "retrieval_tables_filename": "test_tables.json"
+    "retrieval_examples_filename": "test.json"
   }
 }

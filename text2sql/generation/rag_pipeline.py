@@ -1,24 +1,13 @@
-"""Retrieval-augmented Text-to-SQL inference pipeline.
-
-This module implements a self-consistent Text-to-SQL workflow that combines
-retrieval, in-context prompting, and execution-based majority voting. It is
-designed for inference only and uses open-source components for embeddings and
-SQL generation.
-"""
+"""Retrieval and generation helpers for RAG-based Text-to-SQL."""
 from __future__ import annotations
 
-import argparse
-import json
 import logging
-import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Sequence
+from typing import Any, Iterable, List, Sequence
 
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from text2sql.config import DEFAULT_CONFIG_PATH, load_config
 from text2sql.models.router import OpenAIChatLLM
 
 LOGGER = logging.getLogger(__name__)
@@ -31,41 +20,9 @@ class Example:
     db_id: str
 
 
-@dataclass
-class CandidateSQL:
-    sql: str
-    execution_result: list[Any] | None
-    error: str | None
+def format_schema(db_id: str, tables_metadata: dict[str, Any]) -> str:
+    """Return a human-readable schema description for ``db_id``."""
 
-
-def load_examples(dataset_path: Path, num_retrieve: int, filename: str = "dev.json") -> list[Example]:
-    """Load Text-to-SQL examples for retrieval from a dataset file.
-
-    Defaults to ``dev.json`` so the pipeline can iterate over development
-    questions and use the same split for retrieval unless overridden.
-    """
-
-    data_path = dataset_path / filename
-    if not data_path.exists():
-        raise FileNotFoundError(f"Could not find {filename} at {data_path}")
-
-    raw_items = json.loads(data_path.read_text())[:num_retrieve]
-    examples: list[Example] = []
-    for item in raw_items:
-        sql_value = item.get("sql") or item.get("query") or ""
-        examples.append(Example(question=item["question"], sql=sql_value, db_id=item["db_id"]))
-    LOGGER.debug("Loaded %d retrieval examples from %s", len(examples), filename)
-    return examples
-
-
-def _load_tables_metadata(dataset_path: Path, tables_filename: str = "tables.json") -> Dict[str, Any]:
-    tables_path = dataset_path / tables_filename
-    if not tables_path.exists():
-        raise FileNotFoundError(f"Could not find tables.json at {tables_path}")
-    return {item["db_id"]: item for item in json.loads(tables_path.read_text())}
-
-
-def _format_schema(db_id: str, tables_metadata: Dict[str, Any]) -> str:
     schema = tables_metadata.get(db_id)
     if schema is None:
         raise KeyError(f"Schema for db_id '{db_id}' not found in tables.json")
@@ -99,44 +56,6 @@ def retrieve_similar_examples(
     return retrieved
 
 
-def build_prompt(
-    schema: str,
-    user_question: str,
-    retrieved_examples: Iterable[Example],
-    prompt_technique: str = "cot",
-) -> str:
-    """Construct the in-context prompt for SQL generation."""
-
-    examples_block = "\n\n".join(
-        f"Question: {ex.question}\nSQL: {ex.sql}" for ex in retrieved_examples
-    )
-    reasoning_prefix = (
-        "Follow chain-of-thought reasoning before writing the final SQL." if prompt_technique.lower() == "cot" else ""
-    )
-
-    prompt = (
-        "You are an expert Text-to-SQL system that maps natural language questions to SQL queries. "
-        "Use the database schema and similar examples to craft the answer.\n\n"
-        f"Database schema:\n{schema}\n\n"
-        f"Retrieved examples:\n{examples_block}\n\n"
-        f"User question: {user_question}\n"
-        f"{reasoning_prefix}\n"
-        "Think step-by-step and generate SQL. Return only the SQL query."
-    )
-    return prompt
-
-
-def _generate_with_ollama(prompt: str, model: str, temperature: float) -> str:
-    from ollama import chat
-
-    response = chat(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        options={"temperature": temperature},
-    )
-    return response["message"]["content"].strip()
-
-
 def _generate_with_transformers(prompt: str, model: str, temperature: float, generator=None) -> tuple[str, Any]:
     from transformers import pipeline
 
@@ -159,9 +78,7 @@ def generate_sql_candidates(
     generator_cache = None
     router_client: OpenAIChatLLM | None = None
     for _ in range(n):
-        if provider == "ollama":
-            sql = _generate_with_ollama(prompt, model, temperature)
-        elif provider == "transformers":
+        if provider == "transformers":
             sql, generator_cache = _generate_with_transformers(prompt, model, temperature, generator_cache)
         else:
             router_client = router_client or OpenAIChatLLM(router=provider)
@@ -169,174 +86,3 @@ def generate_sql_candidates(
 
         candidates.append(sql)
     return candidates
-
-
-def _resolve_db_path(db_root: Path, db_id: str) -> Path:
-    candidate_paths = [db_root / db_id / f"{db_id}.sqlite", db_root / db_id / f"{db_id}.db"]
-    for path in candidate_paths:
-        if path.exists():
-            return path
-    raise FileNotFoundError(f"Could not locate SQLite database for {db_id} under {db_root}")
-
-
-def execute_sql(sql: str, db_path: Path) -> CandidateSQL:
-    """Execute SQL against the specified SQLite database and capture results."""
-
-    try:
-        with sqlite3.connect(db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(sql)
-            rows = cursor.fetchall()
-            result = [tuple(row) for row in rows]
-            return CandidateSQL(sql=sql, execution_result=result, error=None)
-    except Exception as exc:  # pragma: no cover - defensive
-        LOGGER.warning("Execution failed for candidate: %s", exc)
-        return CandidateSQL(sql=sql, execution_result=None, error=str(exc))
-
-
-def majority_vote(candidates: Iterable[CandidateSQL]) -> tuple[str, list[CandidateSQL]]:
-    """Select the SQL query with the highest execution-based vote."""
-
-    vote_counts: dict[str, int] = {}
-    best_sql = ""
-    candidate_list = list(candidates)
-    for candidate in candidate_list:
-        key = json.dumps(candidate.execution_result, sort_keys=True, default=str) if candidate.error is None else f"error:{candidate.error}"
-        vote_counts[key] = vote_counts.get(key, 0) + 1
-
-    if not vote_counts:
-        return best_sql, candidate_list
-
-    winning_key = max(vote_counts, key=vote_counts.get)
-    for candidate in candidate_list:
-        key = json.dumps(candidate.execution_result, sort_keys=True, default=str) if candidate.error is None else f"error:{candidate.error}"
-        if key == winning_key:
-            best_sql = candidate.sql
-            break
-
-    return best_sql, candidate_list
-
-
-def run_pipeline(
-    user_question: str,
-    db_id: str,
-    config: Mapping[str, Any],
-    examples: list[Example] | None = None,
-    tables_metadata: Dict[str, Any] | None = None,
-    embedder: SentenceTransformer | None = None,
-    example_embeddings: list | None = None,
-) -> tuple[str, list[CandidateSQL]]:
-    rag_config = config.get("rag", {})
-    dataset_path: Path = config["dataset_path"]
-    db_root: Path = config["db_root"]
-    provider = config.get("default_provider")
-    model_name = config.get("default_model")
-    if not provider or not model_name:
-        raise ValueError("Both default_provider and default_model must be set in the config for RAG mode.")
-
-    tables_filename = config.get("tables_filename", "tables.json")
-    retrieval_examples_filename = rag_config.get("retrieval_examples_filename", "test.json")
-    # retrieval_tables_filename = rag_config.get("retrieval_tables_filename", "test_tables.json")
-
-    tables_metadata = tables_metadata or _load_tables_metadata(dataset_path, tables_filename)
-    # _ = _load_tables_metadata(dataset_path, retrieval_tables_filename)
-    examples = examples or load_examples(dataset_path, rag_config.get("num_retrieve", 200), filename=retrieval_examples_filename)
-
-    retrieved = retrieve_similar_examples(
-        user_question,
-        examples,
-        k=rag_config.get("k", 4),
-        embedding_model_name=rag_config.get("embedding_model_name", ""),
-        embedder=embedder,
-        example_embeddings=example_embeddings,
-    )
-
-    schema = _format_schema(db_id, tables_metadata)
-    prompt = build_prompt(schema, user_question, retrieved, prompt_technique=rag_config.get("prompt_technique", "cot"))
-    sql_candidates = generate_sql_candidates(
-        prompt,
-        n=rag_config.get("n", 1),
-        provider=provider,
-        model=model_name,
-        temperature=rag_config.get("temperature", 0.0),
-    )
-
-    db_path = _resolve_db_path(db_root, db_id)
-    executed_candidates = [execute_sql(sql, db_path) for sql in sql_candidates]
-    final_sql, candidates_with_votes = majority_vote(executed_candidates)
-    return final_sql, candidates_with_votes
-
-
-def generate_dataset_rag_predictions(
-    dataset: Iterable[Example],
-    config: Mapping[str, Any],
-    output_path: Path,
-    num_samples: int | None = None,
-) -> list[str]:
-    """Run the RAG pipeline across a dataset and save predictions."""
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset_path: Path = config["dataset_path"]
-    rag_config = config.get("rag", {})
-    tables_filename = config.get("tables_filename", "tables.json")
-    retrieval_examples_filename = rag_config.get("retrieval_examples_filename", "test.json")
-    # retrieval_tables_filename = rag_config.get("retrieval_tables_filename", "test_tables.json")
-
-    tables_metadata = _load_tables_metadata(dataset_path, tables_filename)
-    # _ = _load_tables_metadata(dataset_path, retrieval_tables_filename)
-    retrieval_examples = load_examples(dataset_path, rag_config.get("num_retrieve", 200), filename=retrieval_examples_filename)
-    embedding_model = rag_config.get("embedding_model_name", "sentence-transformers/all-MiniLM-L6-v2")
-    embedder = SentenceTransformer(embedding_model)
-    example_embeddings = embedder.encode([ex.question for ex in retrieval_examples])
-
-    predictions: list[str] = []
-    for idx, example in enumerate(dataset):
-        if num_samples is not None and idx >= num_samples:
-            break
-
-        final_sql, _ = run_pipeline(
-            example.question,
-            example.db_id,
-            config,
-            examples=retrieval_examples,
-            tables_metadata=tables_metadata,
-            embedder=embedder,
-            example_embeddings=example_embeddings,
-        )
-        predictions.append(final_sql)
-
-    output_path.write_text("\n".join(predictions) + "\n", encoding="utf-8")
-    LOGGER.info("Saved %d RAG predictions to %s", len(predictions), output_path)
-    return predictions
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="RAG-based Text-to-SQL inference")
-    parser.add_argument("--question", required=True, help="User question to translate into SQL.")
-    parser.add_argument("--db_id", required=True, help="Database id corresponding to the question.")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=DEFAULT_CONFIG_PATH,
-        help="Path to JSON config file (defaults to config.json).",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:  # pragma: no cover - CLI glue
-    logging.basicConfig(level=logging.INFO)
-    args = parse_args()
-    config = load_config(args.config)
-    final_sql, candidates = run_pipeline(args.question, args.db_id, config)
-    print("Final SQL:", final_sql)
-    print("All candidates and execution results:")
-    for idx, candidate in enumerate(candidates, 1):
-        print(f"Candidate {idx}: {candidate.sql}")
-        if candidate.error:
-            print(f"  Error: {candidate.error}")
-        else:
-            print(f"  Result: {candidate.execution_result}")
-
-
-if __name__ == "__main__":
-    main()

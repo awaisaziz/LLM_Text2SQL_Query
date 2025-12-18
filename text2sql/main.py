@@ -9,10 +9,9 @@ from time import perf_counter
 from dotenv import load_dotenv
 
 from text2sql.config import DEFAULT_CONFIG_PATH, load_config
-from text2sql.generation.sql_generator import SQLGenerator
-from text2sql.generation.rag_pipeline import generate_dataset_rag_predictions, run_pipeline
+from text2sql.generation.sql_generator import SQLGenerator, generate_cot_dataset_predictions
 from text2sql.models.router import ROUTER_CONFIGS, OpenAIChatLLM
-from text2sql.prompt.zero_shot import build_prompt
+from text2sql.prompt.prompt_builder import build_zero_shot_prompt
 from text2sql.util.dataset import SpiderDataset, load_dataset
 from text2sql.util.logger import setup_logging
 
@@ -96,7 +95,7 @@ def main() -> None:
         )
         num_samples = args.num_samples if args.num_samples is not None else config.get("num_sample")
         start_time = perf_counter()
-        generate_dataset_rag_predictions(dataset, config, predictions_path, num_samples=num_samples)
+        generate_cot_dataset_predictions(dataset, config, predictions_path, num_samples=num_samples)
         elapsed = perf_counter() - start_time
     else:
         model_name = config.get("default_model")
@@ -115,7 +114,7 @@ def main() -> None:
         generator = SQLGenerator(
             client=client,
             model_name=model_name,
-            prompt_builder=build_prompt,
+            prompt_builder=build_zero_shot_prompt,
             request_delay=config.get("request_delay", 0.0),
             max_tokens=config.get("max_tokens", 8000),
         )
