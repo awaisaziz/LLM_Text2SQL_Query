@@ -7,9 +7,13 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
+
+_STATEMENT_SPLIT_PATTERN = re.compile(
+    r";\s*|\n+(?=\s*(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|PRAGMA)\b)", re.IGNORECASE
+)
 
 
 @dataclass
@@ -45,29 +49,41 @@ def execute_sql(sql: str, db_path: Path) -> CandidateSQL:
         return CandidateSQL(sql=cleaned_sql or sql, execution_result=None, error=str(exc))
 
 
-def majority_vote(candidates: Iterable[CandidateSQL]) -> tuple[str, list[CandidateSQL]]:
-    """Select the SQL query with the highest execution-based vote."""
+def majority_vote_sql(sql_candidates: list[str], db_path: str | Path) -> tuple[str, list[CandidateSQL]]:
+    """
+    Execute SQL candidates and select the query with the strongest execution agreement.
 
-    candidate_list = list(candidates)
-    if not candidate_list:
-        return "", candidate_list
+    Returns the best SQL (fallback to the first candidate on ties or all failures)
+    and metadata for each candidate execution.
+    """
+
+    if not sql_candidates:
+        return "", []
+
+    database_path = Path(db_path)
+    executed_candidates: list[CandidateSQL] = [execute_sql(sql, database_path) for sql in sql_candidates]
+
+    all_failed = all(candidate.execution_result is None for candidate in executed_candidates)
+    if all_failed:
+        return normalize_sql_query(executed_candidates[0].sql), executed_candidates
 
     vote_counts: dict[str, int] = {}
-    best_sql = candidate_list[0].sql
+    best_sql = executed_candidates[0].sql
     best_count = 0
 
-    for candidate in candidate_list:
+    for candidate in executed_candidates:
         key = (
             json.dumps(candidate.execution_result, sort_keys=True, default=str)
-            if candidate.error is None
-            else f"error:{candidate.error}"
+            if candidate.execution_result is not None
+            else f"error:{candidate.error or 'unknown'}"
         )
-        vote_counts[key] = vote_counts.get(key, 0) + 1
-        if vote_counts[key] > best_count:
+        count = vote_counts.get(key, 0) + 1
+        vote_counts[key] = count
+        if count > best_count:
             best_sql = candidate.sql
-            best_count = vote_counts[key]
+            best_count = count
 
-    return best_sql, candidate_list
+    return normalize_sql_query(best_sql), executed_candidates
 
 
 def _first_statement(sql: str) -> str:
@@ -77,5 +93,12 @@ def _first_statement(sql: str) -> str:
     if not stripped:
         return ""
 
-    parts = [part.strip() for part in re.split(r";\s*|\n\s*\n+", stripped) if part.strip()]
-    return parts[0] if parts else ""
+    first_statement = _STATEMENT_SPLIT_PATTERN.split(stripped, maxsplit=1)[0].strip()
+    return first_statement
+
+
+def normalize_sql_query(sql: str) -> str:
+    """Normalize SQL by returning only the first statement and trimming whitespace/semicolons."""
+
+    normalized = _first_statement(sql).strip()
+    return normalized[:-1].strip() if normalized.endswith(";") else normalized

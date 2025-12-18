@@ -10,7 +10,7 @@ from typing import Any, Callable, Iterable, Mapping, Optional
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-from text2sql.generation.execution import CandidateSQL, execute_sql, majority_vote, resolve_db_path
+from text2sql.generation.execution import majority_vote_sql, normalize_sql_query, resolve_db_path
 from text2sql.generation.rag_pipeline import Example, format_schema, generate_sql_candidates, retrieve_similar_examples
 from text2sql.models.router import OpenAIChatLLM, Prompt
 from text2sql.prompt.prompt_builder import build_cot_prompt
@@ -108,8 +108,10 @@ def generate_cot_dataset_predictions(
         LOGGER.info("SQL Candidates: %s", sql_candidates)
 
         db_path = resolve_db_path(Path(config["db_root"]), example.db_id)
-        executed_candidates: list[CandidateSQL] = [execute_sql(sql, db_path) for sql in sql_candidates]
-        final_sql, _ = majority_vote(executed_candidates)
+        final_sql, executed_candidates = majority_vote_sql(sql_candidates, db_path)
+        # normalized_final_sql = normalize_sql_query(final_sql)
+        # LOGGER.info("Final SQL after execution voting: %s", normalized_final_sql)
+        # predictions.append(normalized_final_sql)
         LOGGER.info("Final SQL after execution voting: %s", final_sql)
         predictions.append(final_sql)
 

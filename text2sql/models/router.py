@@ -95,7 +95,7 @@ class OpenAIChatLLM:
             LOGGER.exception("%s request failed: %s", self.router, exc)
             raise LLMError(f"{self.router} request failed") from exc
         LOGGER.debug("%s response: %s", self.router, completion)
-        
+
         sql = self._extract_sql(completion)
         LOGGER.debug("Received SQL: %s", sql)
         return LLMResult(sql=sql, raw=completion.model_dump())
