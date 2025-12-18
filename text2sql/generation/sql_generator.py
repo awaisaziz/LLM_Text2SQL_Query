@@ -30,7 +30,7 @@ def load_retrieval_examples(dataset_path: Path, num_retrieve: int, filename: str
     raw_items = json.loads(data_path.read_text())[:num_retrieve]
     examples: list[Example] = []
     for item in raw_items:
-        sql_value = item.get("sql") or item.get("query") or ""
+        sql_value = item.get("query") or item.get("sql")
         examples.append(Example(question=item["question"], sql=sql_value, db_id=item["db_id"]))
     LOGGER.debug("Loaded %d retrieval examples from %s", len(examples), filename)
     return examples
@@ -95,6 +95,8 @@ def generate_cot_dataset_predictions(
             retrieved,
             mode=str(config.get("mode", "cot")),
         )
+
+        LOGGER.info("Messages sent to LLM: %s", prompt.get("user"))
         sql_candidates = generate_sql_candidates(
             prompt,
             n=int(config["rag"].get("n", 5)),

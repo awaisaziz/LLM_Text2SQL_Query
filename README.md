@@ -85,8 +85,7 @@ Default values live in `text2sql/config/config.json` and are loaded via `text2sq
     "k": 4,
     "n": 5,
     "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
-    "retrieval_examples_filename": "test.json",
-    "retrieval_tables_filename": "test_tables.json"
+    "retrieval_examples_filename": "test.json"
   }
 }
 ```
@@ -100,15 +99,7 @@ All dataset, model, and RAG parameters are read from this JSON file. Command-lin
 The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. All retrieval settings live in `text2sql/config/config.json` under the `rag` key. Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
 
 ```bash
-python -m text2sql.main \
-  --provider deepseek \
-  --model deepseek-chat \
-  --num_samples 2 \
-  --out predicted/deepseek_chat_predicted.sql \
-  --mode cot \
-  --k 3 \
-  --n 5 \
-  --num_retrieve 200
+python -m text2sql.main --provider deepseek --model deepseek-chat  --out predicted/deepseek_chat_predicted.sql --mode cot --k 2 --n 3 --num_samples 1 --num_retrieve 10
 ```
 
 When `--mode cot` (or `mode` in the config) is set, `text2sql/generation/sql_generator.py` orchestrates the following steps:
@@ -130,12 +121,7 @@ python install.py
 ```
 
 ```bash
-python evaluation.py
---gold spider_data/dev_gold.sql
---pred outputs/predictions.sql
---db spider_data/database
---table spider_data/tables.json
---etype all
+python evaluation.py --gold spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_predicted.sql --db spider_data/database --table spider_data/tables.json --etype all
 ```
 
 The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, and print the reported metrics.

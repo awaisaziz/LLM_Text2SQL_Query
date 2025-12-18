@@ -68,6 +68,36 @@ def _resolve_dataset_path(raw_value: str | Path, base: Path) -> Path:
     return candidates[0]
 
 
+def _resolve_db_root(raw_value: str | Path, dataset_path: Path, base: Path) -> Path:
+    """Resolve the database root, trying locations relative to the dataset.
+
+    ``db_root`` is often specified as ``spider_data/database`` which, when resolved
+    relative to the config directory, points to ``text2sql/config/spider_data``.
+    Here we try both the config directory and the resolved dataset directory to
+    locate the actual database folder.
+    """
+
+    path = Path(raw_value).expanduser()
+    candidates: list[Path] = []
+
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.append((base / path).resolve())
+        dataset_sibling = (dataset_path.parent / path).resolve()
+        if dataset_sibling not in candidates:
+            candidates.append(dataset_sibling)
+        dataset_child = (dataset_path / path).resolve()
+        if dataset_child not in candidates:
+            candidates.append(dataset_child)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0]
+
+
 def load_config(config_path: str | Path | None = None, cli_args: Any | None = None) -> dict[str, Any]:
     """Load configuration from JSON and apply CLI overrides.
 
@@ -86,7 +116,7 @@ def load_config(config_path: str | Path | None = None, cli_args: Any | None = No
 
     dataset_path = _resolve_dataset_path(data.get("dataset_path", "./spider_data/"), base_dir)
     db_root_default = dataset_path / "database"
-    db_root = _resolve_path(data.get("db_root", db_root_default), base_dir)
+    db_root = _resolve_db_root(data.get("db_root", db_root_default), dataset_path, base_dir)
 
     config: dict[str, Any] = {
         "dataset_path": dataset_path,

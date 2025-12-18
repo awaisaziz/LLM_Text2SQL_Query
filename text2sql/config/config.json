@@ -13,7 +13,7 @@
     "num_retrieve": 200,
     "k": 4,
     "n": 5,
-    "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "embedding_model_name": "thenlper/gte-large",
     "retrieval_examples_filename": "test.json"
   }
 }

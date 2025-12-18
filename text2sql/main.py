@@ -112,7 +112,6 @@ def main() -> None:
             raise ValueError(
                 f"Unsupported provider '{provider_name}'. Valid options: {', '.join(sorted(ROUTER_CONFIGS))}."
             )
-
         LOGGER.info("Using provider %s with model %s", provider_name, model_name)
 
         client = OpenAIChatLLM(router=provider_name)

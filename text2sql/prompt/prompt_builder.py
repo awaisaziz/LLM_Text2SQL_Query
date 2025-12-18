@@ -52,20 +52,16 @@ def build_cot_prompt(
 
     IMPORTANT RULES YOU MUST FOLLOW:
     1. Think step-by-step: Analyze the question, schema, and examples
-    2. ALWAYS think step-by-step before writing SQL
-    3. SQL query must use a DISTINCT approach (different tables, joins, subqueries, aggregation methods)
-    4. Only use "AS" for table aliases when joining tables or when column names would be ambiguous
+    2. SQL query must use a DISTINCT approach (different tables, joins, subqueries, aggregation methods)
+    3. Only use "AS" for table aliases when joining tables or when column names would be ambiguous
     - ALLOWED: "SELECT T2.Year ,  T1.Official_Name FROM city AS T1 JOIN farm_competition AS T2 ON T1.City_ID  =  T2.Host_city_ID"
     - ALLOWED: "SELECT avg(T1.product_price) FROM Products AS T1 JOIN Order_items AS T2 ON T1.product_id  =  T2.product_id"
     - PROHIBITED: "SELECT avg(product_price) AS average_price FROM Products"
     - PROHIBITED: "SELECT count(*) AS club_count FROM club"
-    5. NEVER add column aliases - preserve original column names from the schema
-    6. Study the provided similar examples to understand patterns
-    7. Generate ONLY the SQL query - no explanations, no markdown, no additional text
-    
-    Output format: A single SQL query with proper formatting.
+    4. NEVER add column aliases - preserve original column names from the schema
+    5. Study the provided similar examples to understand patterns
+    6. Generate ONLY the SQL query - no explanations, no markdown, no additional text
     """.strip()
-
 
     examples_block = "\n\n".join(
         f"Question: {ex.question}\nSQL: {ex.sql}" for ex in retrieved_examples
@@ -80,7 +76,7 @@ def build_cot_prompt(
 
     QUESTION: {user_question}
 
-    THINKING PROCESS (REQUIRED):
+    THINKING PROCESS:
     1. What is the question asking for? Identify required tables and columns.
     2. Which similar examples show relevant patterns?
     3. What JOINs, WHERE conditions, or aggregations are needed?
