@@ -70,6 +70,7 @@ def generate_sql_candidates(
     for _ in range(n):
         router_client = router_client or OpenAIChatLLM(router=provider)
         sql = router_client.generate(prompt=prompt, model=model, max_tokens=max_tokens).sql
+        LOGGER.info("Generated SQL candidate: %s", sql)
 
         candidates.append(sql)
     return candidates
