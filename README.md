@@ -82,6 +82,35 @@ Default values live in `text2sql/config/config.json`:
 
 `dataset_path` should point to the folder containing `dev.json` and `tables.json`, while `output_llm` controls the default prediction filename (stored under `output/`).
 
+## Retrieval-augmented Text-to-SQL (inference-only)
+
+The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. Configuration lives alongside the existing settings in `text2sql/config/config.json` under the `rag` key:
+
+```json
+"rag": {
+  "num_retrieve": 200,
+  "k": 4,
+  "n": 5,
+  "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2"
+}
+```
+
+Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
+
+```bash
+python -m text2sql.main \
+  --provider deepseek \
+  --model deepseek-chat \
+  --num_samples 20 \
+  --out predicted/deepseek_chat_predicted.sql \
+  --mode cot \
+  --k 3 \
+  --n 5 \
+  --num_retrieve 200
+```
+
+This command will, for each selected example, retrieve the top-`k` similar questions (and SQL) from `dev.json`, build the prompt with the selected `mode` (e.g., `cot` for chain-of-thought), generate `n` SQL candidates, execute them, and return the execution-voted SQL. Additional overrides include `--embedding_model` and `--temperature` for the retrieval encoder and generation sampling temperature. Provider/model defaults come from `default_provider` and `default_model`. The pipeline uses only open-source libraries and models: sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and configurable open-source LLM providers (Ollama or local `transformers`).
+
 ## Evaluation
 
 Use `evaluate.py` to call the official Spider evaluation script and obtain exact match and execution accuracy metrics:

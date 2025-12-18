@@ -52,6 +52,7 @@ pure_eval==0.2.3
 pydantic==2.12.2
 pydantic_core==2.41.4
 Pygments==2.19.2
+sentence-transformers==3.2.1
 pyparsing==3.2.3
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
