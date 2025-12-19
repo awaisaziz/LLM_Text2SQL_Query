@@ -1,6 +1,20 @@
-# Text-to-SQL Baseline
+# Text-to-SQL Generation using Large Language Models
 
-This repository contains a lightweight baseline pipeline for evaluating large language models on the [Spider](https://yale-lily.github.io/spider) Text-to-SQL benchmark using OpenAI-compatible providers. The goal is to provide a clean, modular starting point that can be easily extended with few-shot prompting, schema formatting improvements, and caching.
+
+This repository contains a **lightweight and modular Text-to-SQL baseline pipeline** for evaluating large language models (LLMs) on the **[Spider 1.0](https://yale-lily.github.io/spider)** Text-to-SQL benchmark, using OpenAI-compatible providers. The project implements a **prompt-engineering–based Text-to-SQL system** that translates natural language questions into executable SQL queries over **unseen database schemas**, with evaluation conducted on the **Spider 1.0 development set (`dev.json`)**.
+
+The pipeline combines **retrieval-augmented in-context learning**, **chain-of-thought–style reasoning**, and **execution-based self-consistency** to improve robustness on complex, cross-domain queries. For each input question, semantically similar question–SQL examples are retrieved from the Spider dataset using sentence embeddings and incorporated into a **schema-aware prompt** that encourages structured reasoning over tables, joins, and conditions. The LLM then generates multiple candidate SQL queries, enabling diverse reasoning paths. All candidates are executed locally against the target database, and the final output is selected via **majority voting over execution results**, filtering out invalid or semantically incorrect queries.
+
+This **retrieval–generation–selection pipeline** improves both exact-match and execution accuracy without supervised fine-tuning and provides a clean, extensible baseline that can be easily expanded with additional prompting strategies, schema formatting techniques, or caching mechanisms.
+
+
+### System Architecture
+
+The figure below illustrates the overall system architecture of the Text-to-SQL pipeline, highlighting the retrieval-augmented prompting and execution-validated generation process. Given a natural language question, the system retrieves semantically similar question–SQL examples and relevant schema information from the Spider dataset, constructs a schema-aware and reasoning-oriented prompt, and generates multiple candidate SQL queries using a large language model (LLM). The generated queries are then executed locally against the target database, and the final SQL output is selected via majority voting over execution results to ensure robustness and semantic correctness.
+
+<p align="center">
+  <img src="figures/pipeline.png" alt="Text-to-SQL System Architecture" width="85%">
+</p>
 
 ## Repository structure
 
@@ -32,6 +46,7 @@ The Spider dataset should be available locally under `./spider_data/` with the f
 - `dev.json`
 - `tables.json`
 - `dev_gold.sql`
+- `test.json`
 - `database/` (directory containing the SQLite databases)
 - `evaluate.py` (official Spider evaluation script)
 
@@ -59,7 +74,7 @@ Set the appropriate environment variables for your chosen provider (for example 
 The pipeline is invoked via `text2sql/main.py`. A minimal example that runs the first 20 development examples using the DeepSeek provider is shown below:
 
 ```bash
-python -m text2sql.main --provider deepseek --model deepseek-chat --num_samples 20 --out predicted/deepseek_chat_predicted.sql
+python -m text2sql.main --provider deepseek --model deepseek-chat --num_samples 20 --mode zero_shot --out predicted/deepseek_chat_predicted.sql
 ```
 
 The resulting file contains one SQL query per line. Paths provided via `--out` are resolved under the `output/` directory unless an absolute path is given.
@@ -84,7 +99,7 @@ Default values live in `text2sql/config/config.json` and are loaded via `text2sq
     "num_retrieve": 200,
     "k": 4,
     "n": 5,
-    "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "embedding_model_name": "thenlper/gte-large",
     "retrieval_examples_filename": "test.json"
   }
 }
@@ -99,7 +114,7 @@ All dataset, model, and RAG parameters are read from this JSON file. Command-lin
 The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. All retrieval settings live in `text2sql/config/config.json` under the `rag` key. Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
 
 ```bash
-python -m text2sql.main --provider deepseek --model deepseek-chat  --out predicted/deepseek_chat_predicted.sql --mode cot --k 2 --n 3 --num_samples 1 --num_retrieve 10
+python -m text2sql.main --provider deepseek --model deepseek-chat  --out predicted/deepseek_chat_k=9_n=7_predicted.sql --mode cot --k 9 --n 7 --num_samples 100 --num_retrieve 2000
 ```
 
 When `--mode cot` (or `mode` in the config) is set, `text2sql/generation/sql_generator.py` orchestrates the following steps:
@@ -107,7 +122,7 @@ When `--mode cot` (or `mode` in the config) is set, `text2sql/generation/sql_gen
 1. Load `dev.json`/`tables.json` to obtain questions and schema metadata for retrieval and schema formatting.
 2. Call `text2sql/generation/rag_pipeline.py` to embed candidate questions and retrieve the top-`k` examples for each target question.
 3. Build a chain-of-thought prompt with `text2sql/prompt/prompt_builder.py`.
-4. Generate `n` SQL candidates with the configured provider (DeepSeek, ChatGPT, or OpenRouter-compatible models).
+4. Generate `n` SQL candidates with the configured provider (DeepSeek, ChatGPT models).
 5. Execute candidates and perform majority voting in `text2sql/generation/execution.py` to pick the final SQL string.
 
 The pipeline uses sentence-transformers for embeddings, scikit-learn for cosine similarity, SQLite for execution, and the configured chat provider for generation. Provider/model defaults come from `default_provider` and `default_model`.
@@ -121,10 +136,24 @@ python install.py
 ```
 
 ```bash
-python evaluation.py --gold spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_predicted.sql --db spider_data/database --table spider_data/tables.json --etype all
+python evaluation.py --gold spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_k=9_n=7_predicted.sql --db spider_data/database --table spider_data/tables.json --etype all
 ```
 
 The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, and print the reported metrics.
+
+### Results on Spider 1.0 (Dev Set)
+
+| Method | EM (%) | EX (%) |
+|--------|--------|--------|
+| DeepSeek-Chat (Proposed, k=9, n=13) | 79.0 | 80.0 |
+| DeepSeek-Chat (Proposed, k=5, n=7) | 71.0 | 78.0 |
+| DeepSeek-Chat (Proposed, k=9, n=7) | 74.0 | 78.0 |
+| DeepSeek-Chat (Proposed, k=3, n=5) | 67.0 | 77.0 |
+| DeepSeek-reasoner (Proposed, k=2, n=3) | 63.0 | 74.0 |
+
+
+**Table:** Evaluation results of the proposed retrieval-augmented, execution-validated Text-to-SQL pipeline on the first 100 queries from the Spider 1.0 `dev.json` dataset.
+
 
 ## Extending the baseline
 
