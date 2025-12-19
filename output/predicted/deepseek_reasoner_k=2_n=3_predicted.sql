@@ -52,11 +52,7 @@ SELECT PetType ,  MAX(weight) FROM Pets GROUP BY PetType
 SELECT COUNT(*) FROM Student AS T1 JOIN Has_Pet AS T2 ON T1.StuID  =  T2.StuID WHERE T1.Age  >  20
 SELECT COUNT(*) FROM Student AS T1 JOIN Has_Pet AS T2 ON T1.StuID  =  T2.StuID WHERE T1.Age  >  20
 SELECT COUNT(*) FROM Student AS T1 JOIN Has_Pet AS T2 ON T1.StuID = T2.StuID JOIN Pets AS T3 ON T2.PetID = T3.PetID WHERE T1.Sex = "F" AND T3.PetType = "dog"
-SELECT COUNT(DISTINCT T3.PetID)
-FROM Student AS T1
-JOIN Has_Pet AS T2 ON T1.StuID = T2.StuID
-JOIN Pets AS T3 ON T2.PetID = T3.PetID
-WHERE T1.Sex = 'female' AND T3.PetType = 'dog'
+SELECT COUNT(DISTINCT T3.PetID) FROM Student AS T1 JOIN Has_Pet AS T2 ON T1.StuID = T2.StuID JOIN Pets AS T3 ON T2.PetID = T3.PetID WHERE T1.Sex = 'female' AND T3.PetType = 'dog'
 SELECT count(DISTINCT PetType) FROM Pets
 SELECT count(DISTINCT PetType) FROM Pets
 SELECT DISTINCT T1.Fname FROM Student AS T1 JOIN Has_Pet AS T2 ON T1.StuID = T2.StuID JOIN Pets AS T3 ON T2.PetID = T3.PetID WHERE T3.PetType IN ('cat', 'dog')
