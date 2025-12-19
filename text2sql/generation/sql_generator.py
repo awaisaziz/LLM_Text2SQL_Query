@@ -32,7 +32,7 @@ def load_retrieval_examples(dataset_path: Path, num_retrieve: int, filename: str
     for item in raw_items:
         sql_value = item.get("query") or item.get("sql")
         examples.append(Example(question=item["question"], sql=sql_value, db_id=item["db_id"]))
-    LOGGER.debug("Loaded %d retrieval examples from %s", len(examples), filename)
+    LOGGER.info("Loaded %d retrieval examples from %s", len(examples), filename)
     return examples
 
 
