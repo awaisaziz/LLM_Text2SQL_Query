@@ -154,11 +154,3 @@ The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, a
 
 **Table:** Evaluation results of the proposed retrieval-augmented, execution-validated Text-to-SQL pipeline on the first 100 queries from the Spider 1.0 `dev.json` dataset.
 
-
-## Extending the baseline
-
-- Modify `prompt_template.py` to add few-shot demonstrations, schema reformatting, or additional instructions.
-- Enhance `llm.py` to capture latency, prompt/response token usage, or to integrate caching.
-- Add experiments and ablation studies under a new module without touching the core baseline files.
-
-Contributions are welcome!
