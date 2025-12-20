@@ -74,12 +74,14 @@ def _resolve_dataset_path(
 
 
 def _resolve_db_root(raw_value: str | Path, dataset_path: Path, base: Path) -> Path:
-    """Resolve the database root, trying locations relative to the dataset.
+    """Resolve the database root, preferring paths next to the dataset folder.
 
-    ``db_root`` is often specified as ``spider_data/database`` which, when resolved
-    relative to the config directory, points to ``text2sql/config/spider_data``.
-    Here we try both the config directory and the resolved dataset directory to
-    locate the actual database folder.
+    ``db_root`` is frequently configured as ``data/spider_data/database``. Resolving
+    that relative to the config directory incorrectly yields
+    ``text2sql/config/data/spider_data/database``. To make the RAG pipeline robust
+    when datasets live under the repository ``data/`` directory (or elsewhere on the
+    filesystem), we try multiple locations derived from the dataset path and current
+    working directory before falling back to the config directory.
     """
 
     path = Path(raw_value).expanduser()
@@ -88,13 +90,16 @@ def _resolve_db_root(raw_value: str | Path, dataset_path: Path, base: Path) -> P
     if path.is_absolute():
         candidates.append(path)
     else:
-        candidates.append((base / path).resolve())
-        dataset_sibling = (dataset_path.parent / path).resolve()
-        if dataset_sibling not in candidates:
-            candidates.append(dataset_sibling)
-        dataset_child = (dataset_path / path).resolve()
-        if dataset_child not in candidates:
-            candidates.append(dataset_child)
+        ordered_candidates = [
+            (base / path).resolve(),
+            (Path.cwd() / path).resolve(),
+            (dataset_path / path).resolve(),
+            (dataset_path.parent / path).resolve(),
+            (dataset_path / "database").resolve(),
+        ]
+        for candidate in ordered_candidates:
+            if candidate not in candidates:
+                candidates.append(candidate)
 
     for candidate in candidates:
         if candidate.exists():
