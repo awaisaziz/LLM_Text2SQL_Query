@@ -35,7 +35,12 @@ def _apply_override(config: MutableMapping[str, Any], key_path: Sequence[str], v
     target[key_path[-1]] = value
 
 
-def _resolve_dataset_path(raw_value: str | Path, base: Path) -> Path:
+def _resolve_dataset_path(
+    raw_value: str | Path,
+    base: Path,
+    dev_filename: str = "dev.json",
+    tables_filename: str = "tables.json",
+) -> Path:
     """Resolve the dataset path, preferring an existing folder with Spider files.
 
     The JSON configuration is stored in ``text2sql/config/``, so resolving relative
@@ -58,8 +63,8 @@ def _resolve_dataset_path(raw_value: str | Path, base: Path) -> Path:
             candidates.append(cwd_candidate)
 
     for candidate in candidates:
-        dev_file = candidate / "dev.json"
-        tables_file = candidate / "tables.json"
+        dev_file = candidate / dev_filename
+        tables_file = candidate / tables_filename
         if dev_file.exists() and tables_file.exists():
             return candidate
 
@@ -113,14 +118,23 @@ def load_config(config_path: str | Path | None = None, cli_args: Any | None = No
     base_dir = path.parent
 
     rag_data = data.get("rag", {})
+    dataset_name = data.get("dataset_name", "spider")
+    dev_filename = data.get("dev_filename", "dev.json")
+    tables_filename = data.get("tables_filename", "tables.json")
+    sql_field = data.get("sql_field", "query")
 
-    dataset_path = _resolve_dataset_path(data.get("dataset_path", "./spider_data/"), base_dir)
+    dataset_path = _resolve_dataset_path(
+        data.get("dataset_path", "./spider_data/"), base_dir, dev_filename=dev_filename, tables_filename=tables_filename
+    )
     db_root_default = dataset_path / "database"
     db_root = _resolve_db_root(data.get("db_root", db_root_default), dataset_path, base_dir)
 
     config: dict[str, Any] = {
+        "dataset_name": dataset_name,
         "dataset_path": dataset_path,
-        "tables_filename": data.get("tables_filename", "tables.json"),
+        "dev_filename": dev_filename,
+        "tables_filename": tables_filename,
+        "sql_field": sql_field,
         "default_provider": data.get("default_provider", "deepseek"),
         "default_model": data.get("default_model", "deepseek-chat"),
         "num_sample": int(data.get("num_sample", 100)),

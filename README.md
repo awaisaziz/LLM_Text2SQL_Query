@@ -85,7 +85,11 @@ Default values live in `text2sql/config/config.json` and are loaded via `text2sq
 
 ```json
 {
+  "dataset_name": "spider",
   "dataset_path": "./spider_data/",
+  "dev_filename": "dev.json",
+  "tables_filename": "tables.json",
+  "sql_field": "query",
   "default_provider": "deepseek",
   "default_model": "deepseek-chat",
   "num_sample": 100,
@@ -129,17 +133,47 @@ The pipeline uses sentence-transformers for embeddings, scikit-learn for cosine 
 
 ## Evaluation
 
-Use `evaluate.py` to call the official Spider evaluation script and obtain exact match and execution accuracy metrics:
+Use `evaluation/spider/evaluation.py` to call the official Spider evaluation script and obtain exact match and execution accuracy metrics:
 
 ```bash
 python install.py
 ```
 
 ```bash
-python evaluation.py --gold spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_k=9_n=7_predicted.sql --db spider_data/database --table spider_data/tables.json --etype all
+python evaluation/spider/evaluation.py --gold data/spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_k=9_n=7_predicted.sql --db data/spider_data/database --table data/spider_data/tables.json --etype all
 ```
 
 The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, and print the reported metrics.
+
+### Working with the BIRD dataset
+
+To run the pipeline on the BIRD dev split, point the configuration to the BIRD assets:
+
+```json
+{
+  "dataset_name": "bird",
+  "dataset_path": "./data/bird/",
+  "dev_filename": "dev.json",
+  "tables_filename": "dev_tables.json",
+  "sql_field": "SQL",
+  "db_root": "data/bird/dev_databases",
+  "output_llm": "predict_dev.json",
+  "rag": {
+    "retrieval_examples_filename": "dev.json"
+  }
+}
+```
+
+- `dataset_path` should point to the folder containing `dev.json`, `dev_tables.json`, and `dev_databases/`.
+- The pipeline will automatically emit BIRD-formatted predictions (JSON mapping of IDs to `SQL\\t----- bird -----\\t<db_id>`) when `dataset_name` is set to `bird`.
+
+After generating predictions, run the BIRD evaluator:
+
+```bash
+python evaluation/bird/evaluation.py --predicted_sql_path output/ --ground_truth_path data/bird --data_mode dev --db_root_path data/bird/dev_databases/ --num_cpus 4 --meta_time_out 30.0 --diff_json_path data/bird/dev.json
+```
+
+> Note: the evaluator looks for `predict_dev.json` and `dev_gold.sql` under the provided paths, so keep the default filenames or adjust the flags accordingly.
 
 ### Results on Spider 1.0 (Dev Set)
 
@@ -153,4 +187,3 @@ The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, a
 
 
 **Table:** Evaluation results of the proposed retrieval-augmented, execution-validated Text-to-SQL pipeline on the first 100 queries from the Spider 1.0 `dev.json` dataset.
-

@@ -82,7 +82,13 @@ def main() -> None:
     log_file = setup_logging(Path("output"))
     LOGGER.info("Logs will be written to %s", log_file)
 
-    dataset: SpiderDataset = load_dataset(config["dataset_path"])
+    dataset: SpiderDataset = load_dataset(
+        config["dataset_path"],
+        dev_filename=config.get("dev_filename", "dev.json"),
+        tables_filename=config.get("tables_filename", "tables.json"),
+        sql_field=config.get("sql_field", "query"),
+        dataset_name=config.get("dataset_name", "spider"),
+    )
     predictions_path = _resolve_predictions_path(Path(config["output_llm"]))
     rag_mode = (config.get("mode") or "").lower() == "cot"
 
@@ -100,7 +106,9 @@ def main() -> None:
             config,
             predictions_path,
             num_samples=num_samples,
-            max_tokens=config.get("max_tokens", 8000))
+            max_tokens=config.get("max_tokens", 8000),
+            dataset_name=config.get("dataset_name", "spider"),
+        )
         elapsed = perf_counter() - start_time
     else:
         model_name = config.get("default_model")
@@ -121,6 +129,7 @@ def main() -> None:
             prompt_builder=build_zero_shot_prompt,
             request_delay=config.get("request_delay", 0.0),
             max_tokens=config.get("max_tokens", 8000),
+            dataset_name=config.get("dataset_name", "spider"),
         )
 
         start_time = perf_counter()

@@ -1,19 +1,22 @@
 {
-  "dataset_path": "./spider_data/",
+  "dataset_name": "bird",
+  "dataset_path": "./data/bird/",
+  "dev_filename": "dev.json",
+  "tables_filename": "dev_tables.json",
+  "sql_field": "SQL",
   "default_provider": "deepseek",
   "default_model": "deepseek-chat",
   "num_sample": 100,
   "max_tokens": 8000,
   "request_delay": 0.0,
   "mode": "zero_shot",
-  "db_root": "spider_data/database",
-  "output_llm": "predicted/deepseek_chat_k=5_n=7_predicted.json",
-  "tables_filename": "tables.json",
+  "db_root": "data/bird/dev_database",
+  "output_llm": "predicted/deepseek_chat_k=5_n=7_bird.json",
   "rag": {
     "num_retrieve": 1000,
     "k": 5,
     "n": 7,
     "embedding_model_name": "thenlper/gte-large",
-    "retrieval_examples_filename": "test.json"
+    "retrieval_examples_filename": "train.json"
   }
 }

@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class SpiderExample:
-    """Container for a single Spider example."""
+    """Container for a single dataset example."""
 
     question: str
     gold_sql: str
@@ -21,26 +21,18 @@ class SpiderExample:
 
 
 class SpiderDataset:
-    """Reader for the Spider development set.
-
-    Parameters
-    ----------
-    root : str or Path
-        Path to the Spider dataset directory containing ``dev.json`` and
-        ``tables.json``.
-    dev_filename : str
-        Name of the JSON file with Spider examples.
-    tables_filename : str
-        Name of the JSON file describing schema metadata.
-    """
+    """Reader for Text-to-SQL development sets (Spider/BIRD)."""
 
     def __init__(
         self,
         root: os.PathLike[str] | str,
         dev_filename: str = "dev.json",
         tables_filename: str = "tables.json",
+        sql_field: str = "query",
+        dataset_name: str = "spider",
     ) -> None:
         self.root = Path(root)
+        self.dataset_name = dataset_name
         self.dev_path = self.root / dev_filename
         self.tables_path = self.root / tables_filename
 
@@ -52,15 +44,20 @@ class SpiderDataset:
             )
 
         LOGGER.debug("Loading Spider dev set from %s", self.dev_path)
-        self._examples: List[SpiderExample] = [
-            SpiderExample(
-                question=item["question"],
-                gold_sql=item["query"],
-                db_id=item["db_id"],
+        raw_examples = json.loads(self.dev_path.read_text())
+        self._examples: List[SpiderExample] = []
+        for item in raw_examples:
+            sql_value = item.get(sql_field) or item.get("query") or item.get("SQL")
+            if sql_value is None:
+                raise KeyError(f"Could not find SQL field '{sql_field}' (or fallback) in dev file.")
+            self._examples.append(
+                SpiderExample(
+                    question=item["question"],
+                    gold_sql=sql_value,
+                    db_id=item["db_id"],
+                )
             )
-            for item in json.loads(self.dev_path.read_text())
-        ]
-        LOGGER.debug("Loaded %d Spider examples", len(self._examples))
+        LOGGER.debug("Loaded %d %s examples", len(self._examples), dataset_name.upper())
 
         LOGGER.debug("Loading schema metadata from %s", self.tables_path)
         self._schemas: Dict[str, dict] = {
@@ -121,7 +118,19 @@ class SpiderDataset:
             yield table_name, table_to_columns.get(idx, [])
 
 
-def load_dataset(dataset_path: os.PathLike[str] | str) -> SpiderDataset:
+def load_dataset(
+    dataset_path: os.PathLike[str] | str,
+    dev_filename: str = "dev.json",
+    tables_filename: str = "tables.json",
+    sql_field: str = "query",
+    dataset_name: str = "spider",
+) -> SpiderDataset:
     """Instantiate :class:`SpiderDataset` for the given dataset directory."""
 
-    return SpiderDataset(dataset_path)
+    return SpiderDataset(
+        dataset_path,
+        dev_filename=dev_filename,
+        tables_filename=tables_filename,
+        sql_field=sql_field,
+        dataset_name=dataset_name,
+    )
