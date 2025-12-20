@@ -118,12 +118,12 @@ def compute_acc_by_diff(exec_results,diff_json_path):
             challenging_results.append(exec_results[i])
 
     def accuracy(result_list):
-        return (sum(res['res'] for res in result_list) / len(result_list) * 100) if result_list else 0.0
+        return (sum(res['res'] for res in result_list) / len(result_list)) if result_list else 0.0
 
     simple_acc = accuracy(simple_results)
     moderate_acc = accuracy(moderate_results)
     challenging_acc = accuracy(challenging_results)
-    all_acc = (sum(results) / num_queries * 100) if num_queries else 0.0
+    all_acc = (sum(results) / num_queries) if num_queries else 0.0
     count_lists = [len(simple_results), len(moderate_results), len(challenging_results), num_queries]
     return simple_acc, moderate_acc, challenging_acc, all_acc, count_lists
 
