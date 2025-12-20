@@ -20,6 +20,19 @@ from text2sql.util.sql_cleaner import extract_sql_query
 LOGGER = logging.getLogger(__name__)
 
 
+def _write_plain_sql(predictions: list[tuple[str, str]], output_path: Path) -> None:
+    """Persist predicted SQL statements as plain text (Spider)."""
+
+    output_path.write_text("\n".join(sql for sql, _ in predictions) + "\n", encoding="utf-8")
+
+
+def _write_bird_json(predictions: list[tuple[str, str]], output_path: Path) -> None:
+    """Persist predicted SQL statements in the BIRD JSON format."""
+
+    formatted = {str(idx): f"{sql}\t----- bird -----\t{db_id}" for idx, (sql, db_id) in enumerate(predictions)}
+    output_path.write_text(json.dumps(formatted, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def load_retrieval_examples(
     dataset_path: Path, num_retrieve: int, filename: str = "dev.json", sql_field: str = "query"
 ) -> list[Example]:
@@ -120,10 +133,9 @@ def generate_cot_dataset_predictions(
         predictions.append((final_sql, example.db_id))
 
     if dataset_name.lower() == "bird":
-        formatted = {str(idx): f"{sql}\t----- bird -----\t{db_id}" for idx, (sql, db_id) in enumerate(predictions)}
-        output_path.write_text(json.dumps(formatted, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_bird_json(predictions, output_path)
     else:
-        output_path.write_text("\n".join(sql for sql, _ in predictions) + "\n", encoding="utf-8")
+        _write_plain_sql(predictions, output_path)
     LOGGER.info("Saved %d RAG predictions to %s", len(predictions), output_path)
     return [sql for sql, _ in predictions]
 
@@ -183,9 +195,8 @@ class SQLGenerator:
                 time.sleep(self.request_delay)
 
         if self.dataset_name.lower() == "bird":
-            formatted = {str(idx): f"{sql}\t----- bird -----\t{db_id}" for idx, (sql, db_id) in enumerate(predictions)}
-            output_path.write_text(json.dumps(formatted, ensure_ascii=False, indent=2), encoding="utf-8")
+            _write_bird_json(predictions, output_path)
         else:
-            output_path.write_text("\n".join(sql for sql, _ in predictions) + "\n", encoding="utf-8")
+            _write_plain_sql(predictions, output_path)
         LOGGER.info("Saved %d predictions to %s", len(predictions), output_path)
         return [sql for sql, _ in predictions]

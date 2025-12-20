@@ -7,24 +7,24 @@ from typing import Iterable, Mapping, TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from text2sql.generation.rag_pipeline import Example
 
-ZERO_SHOT_TEMPLATE = dedent(
-    """
-    Given the following database schema:
-    {schema}
-    Write a correct SQL query to answer this question:
-    Q: {question}
-    """
-).strip()
+# ZERO_SHOT_TEMPLATE = dedent(
+#     """
+#     Given the following database schema:
+#     {schema}
+#     Write a correct SQL query to answer this question:
+#     Q: {question}
+#     """
+# ).strip()
 
 
 def build_zero_shot_prompt(question: str, schema: str, db_id: str | None = None) -> Mapping[str, str]:
     """Return the zero-shot prompt for ``question`` and ``schema`` as chat messages."""
 
     del db_id  # db_id is unused for now, but kept for compatibility
-    system_prompt = (
-        "You are an expert Text-to-SQL system that maps natural language questions to SQL queries. "
-        "Use the database schema to craft a correct SQL answer. Return only the SQL query."
-    )
+    system_prompt = """
+        You are an expert Text-to-SQL system that maps natural language questions to SQL queries.
+        Use the database schema to craft a correct SQL answer. Return only the SQL query.
+    """.strip()
 
     user_prompt = f"""
     Given the following database schema:

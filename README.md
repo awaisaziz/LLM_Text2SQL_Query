@@ -86,7 +86,7 @@ Default values live in `text2sql/config/config.json` and are loaded via `text2sq
 ```json
 {
   "dataset_name": "spider",
-  "dataset_path": "./spider_data/",
+  "dataset_path": "./data/spider_data/",
   "dev_filename": "dev.json",
   "tables_filename": "tables.json",
   "sql_field": "query",
@@ -96,7 +96,7 @@ Default values live in `text2sql/config/config.json` and are loaded via `text2sq
   "max_tokens": 8000,
   "request_delay": 0.0,
   "mode": "zero_shot",
-  "db_root": "spider_data/database",
+  "db_root": "data/spider_data/database",
   "output_llm": "predicted/deepseek_chat_predicted.json",
   "tables_filename": "tables.json",
   "rag": {
@@ -157,9 +157,9 @@ To run the pipeline on the BIRD dev split, point the configuration to the BIRD a
   "tables_filename": "dev_tables.json",
   "sql_field": "SQL",
   "db_root": "data/bird/dev_databases",
-  "output_llm": "predict_dev.json",
+  "output_llm": "predicted/deepseek_chat_k=5_n=7_bird.json",
   "rag": {
-    "retrieval_examples_filename": "dev.json"
+    "retrieval_examples_filename": "train.json"
   }
 }
 ```

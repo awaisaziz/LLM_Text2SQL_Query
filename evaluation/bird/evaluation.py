@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import argparse
 import sqlite3
@@ -52,7 +53,11 @@ def package_sqls(sql_path, db_root_path, mode='gpt', data_mode='dev'):
     clean_sqls = []
     db_path_list = []
     if mode == 'gpt':
-        sql_data = json.load(open(sql_path + 'predict_' + data_mode + '.json', 'r'))
+        json_path = sql_path
+        if os.path.isdir(sql_path):
+            json_path = os.path.join(sql_path, f'predict_{data_mode}.json')
+
+        sql_data = load_json(json_path)
         for idx, sql_str in sql_data.items():
             if type(sql_str) == str:
                 sql, db_name = sql_str.split('\t----- bird -----\t')
@@ -62,7 +67,13 @@ def package_sqls(sql_path, db_root_path, mode='gpt', data_mode='dev'):
             db_path_list.append(db_root_path + db_name + '/' + db_name + '.sqlite')
 
     elif mode == 'gt':
-        sqls = open(sql_path + data_mode + '_gold.sql')
+        sql_file = sql_path
+        if os.path.isdir(sql_path):
+            sql_file = os.path.join(sql_path, f'{data_mode}_gold.sql')
+            if not os.path.exists(sql_file):
+                sql_file = os.path.join(sql_path, f'{data_mode}.sql')
+
+        sqls = open(sql_file)
         sql_txt = sqls.readlines()
         # sql_txt = [sql.split('\t')[0] for sql in sql_txt]
         for idx, sql_str in enumerate(sql_txt):
@@ -88,24 +99,33 @@ def compute_acc_by_diff(exec_results,diff_json_path):
     num_queries = len(exec_results)
     results = [res['res'] for res in exec_results]
     contents = load_json(diff_json_path)
+    if num_queries != len(contents):
+        print(
+            f"Warning: mismatch between executed results ({num_queries}) and difficulty entries ({len(contents)}); truncating to the shorter length.",
+            file=sys.stderr,
+        )
+        contents = contents[:num_queries]
     simple_results, moderate_results, challenging_results = [], [], []
 
     for i,content in enumerate(contents):
-        if content['difficulty'] == 'simple':
+        if content.get('difficulty') == 'simple':
             simple_results.append(exec_results[i])
 
-        if content['difficulty'] == 'moderate':
+        if content.get('difficulty') == 'moderate':
             moderate_results.append(exec_results[i])
 
-        if content['difficulty'] == 'challenging':
+        if content.get('difficulty') == 'challenging':
             challenging_results.append(exec_results[i])
 
-    simple_acc = sum([res['res'] for res in simple_results])/len(simple_results)
-    moderate_acc = sum([res['res'] for res in moderate_results])/len(moderate_results)
-    challenging_acc = sum([res['res'] for res in challenging_results])/len(challenging_results)
-    all_acc = sum(results)/num_queries
+    def accuracy(result_list):
+        return (sum(res['res'] for res in result_list) / len(result_list) * 100) if result_list else 0.0
+
+    simple_acc = accuracy(simple_results)
+    moderate_acc = accuracy(moderate_results)
+    challenging_acc = accuracy(challenging_results)
+    all_acc = (sum(results) / num_queries * 100) if num_queries else 0.0
     count_lists = [len(simple_results), len(moderate_results), len(challenging_results), num_queries]
-    return simple_acc * 100, moderate_acc * 100, challenging_acc * 100, all_acc * 100, count_lists
+    return simple_acc, moderate_acc, challenging_acc, all_acc, count_lists
 
 
 
