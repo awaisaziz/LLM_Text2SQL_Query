@@ -118,7 +118,7 @@ All dataset, model, and RAG parameters are read from this JSON file. Command-lin
 The repository also ships an inference-only, retrieval-augmented pipeline that layers cosine-similarity retrieval, self-consistency, and execution-based majority voting. All retrieval settings live in `text2sql/config/config.json` under the `rag` key. Run the pipeline over the development set directly from the main entry point (questions are read from `dev.json`):
 
 ```bash
-python -m text2sql.main --provider deepseek --model deepseek-chat  --out predicted/deepseek_chat_k=9_n=7_predicted.sql --mode cot --k 9 --n 7 --num_samples 100 --num_retrieve 2000
+python -m text2sql.main --provider deepseek --model deepseek-chat  --out predicted/deepseek_chat_k=9_n=13_predicted.sql --mode cot --k 9 --n 13 --num_samples 100 --num_retrieve 2000
 ```
 
 When `--mode cot` (or `mode` in the config) is set, `text2sql/generation/sql_generator.py` orchestrates the following steps:
@@ -140,7 +140,7 @@ python install.py
 ```
 
 ```bash
-python evaluation/spider/evaluation.py --gold data/spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_k=9_n=7_predicted.sql --db data/spider_data/database --table data/spider_data/tables.json --etype all
+python evaluation/spider/evaluation.py --gold data/spider_data/dev_gold.sql --pred output/predicted/deepseek_chat_k=9_n=13_predicted.sql --db data/spider_data/database --table data/spider_data/tables.json --etype all
 ```
 
 The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, and print the reported metrics.
@@ -167,10 +167,16 @@ To run the pipeline on the BIRD dev split, point the configuration to the BIRD a
 - `dataset_path` should point to the folder containing `dev.json`, `dev_tables.json`, and `dev_databases/`.
 - The pipeline will automatically emit BIRD-formatted predictions (JSON mapping of IDs to `SQL\\t----- bird -----\\t<db_id>`) when `dataset_name` is set to `bird`.
 
+For generating predictions on BIRD dataset, run the model
+
+```bash
+python -m text2sql.main --provider deepseek --model deepseek-chat --out predicted/deepseek_chat_k=9_n=13_bird.json --mode cot --k 9 --n 13 --num_samples 100 --num_retrieve 2000
+```
+
 After generating predictions, run the BIRD evaluator:
 
 ```bash
-python evaluation/bird/evaluation.py --predicted_sql_path output/ --ground_truth_path data/bird --data_mode dev --db_root_path data/bird/dev_databases/ --num_cpus 4 --meta_time_out 30.0 --diff_json_path data/bird/dev.json
+python evaluation/bird/evaluation.py --predicted_sql_path output/predicted/deepseek_chat_k=9_n=13_bird.json --ground_truth_path data/bird --data_mode dev --db_root_path data/bird/dev_databases/ --num_cpus 4 --meta_time_out 30.0 --diff_json_path data/bird/dev.json
 ```
 
 > Note: the evaluator looks for `predict_dev.json` and `dev_gold.sql` under the provided paths, so keep the default filenames or adjust the flags accordingly.
@@ -187,3 +193,12 @@ python evaluation/bird/evaluation.py --predicted_sql_path output/ --ground_truth
 
 
 **Table:** Evaluation results of the proposed retrieval-augmented, execution-validated Text-to-SQL pipeline on the first 100 queries from the Spider 1.0 `dev.json` dataset.
+
+### Results on BIRD (Dev Set)
+
+| Method | EX (%) |
+|--------|--------|
+| DeepSeek-Chat (Proposed, k=9, n=13) | 21.0 |
+
+
+**Table:** Evaluation results of the proposed retrieval-augmented, execution-validated Text-to-SQL pipeline on the first 100 queries from the BIRD `dev.json` dataset.
