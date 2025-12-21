@@ -157,7 +157,7 @@ To run the pipeline on the BIRD dev split, point the configuration to the BIRD a
   "tables_filename": "dev_tables.json",
   "sql_field": "SQL",
   "db_root": "data/bird/dev_databases",
-  "output_llm": "predicted/deepseek_chat_k=5_n=7_bird.json",
+  "output_llm": "predicted/deepseek_chat_k=9_n=13_bird.json",
   "rag": {
     "retrieval_examples_filename": "train.json"
   }
