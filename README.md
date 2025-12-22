@@ -28,15 +28,22 @@ root
 │   │   └── provider/           # Provider-specific router settings (deepseek, chatgpt, openrouter)
 │   ├── prompt/                 # Prompt builder utilities (zero-shot + COT)
 │   └── util/                   # Dataset loader, SQL cleaner, logging helpers
+├── baselines/                  # Baseline prompts, scripts, and saved outputs
+├── evaluation/                 # Official evaluation utilities
+│   ├── bird/evaluation.py      # BIRD evaluation script
+│   └── spider/                 # Spider evaluation utilities
+│       ├── evaluation.py
+│       ├── process_sql.py
+│       └── install.py
+├── figures/                    # Documentation figures
 ├── output/                     # Run artifacts
 │   ├── log/                    # Log files
 │   └── predicted/              # Generated SQL predictions
-├── spider_data/                # Spider dataset root (dev.json, tables.json, database/)
+├── data/                       # Contains spider_data and bird dataset (containing dev.json, train.json, test.json and databases)
 ├── README.md                   # This file
 ├── requirements.txt            # Python dependencies
-├── evaluation.py               # Official evaluation file from the Spider Github repo
-├── process_sql.py              # Official process_sql.py file from the Spider Github repo
-└── install.py                  # Once install the package nltk module
+├── .gitattributes
+└── .gitignore
 ```
 
 The Spider dataset should be available locally under `./spider_data/` with the following expected files:
