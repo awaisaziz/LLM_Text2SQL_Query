@@ -1,12 +1,10 @@
 # Text-to-SQL Generation using Large Language Models
 
+This repository contains a **lightweight and modular Text-to-SQL pipeline** for evaluating large language models (LLMs) on the **[Spider 1.0](https://yale-lily.github.io/spider)** and **[BIRD](https://bird-bench.github.io/)** Text-to-SQL benchmarks, using OpenAI-compatible providers. The project implements a **prompt-engineering–based Text-to-SQL system** that translates natural language questions into executable SQL queries over **unseen database schemas**, with evaluation conducted on the first 100 queries on **Spider 1.0 development set (`dev.json`)** and a subset of the **BIRD development set (`dev.json`)**, which features larger schemas and more realistic database values.
 
-This repository contains a **lightweight and modular Text-to-SQL baseline pipeline** for evaluating large language models (LLMs) on the **[Spider 1.0](https://yale-lily.github.io/spider)** Text-to-SQL benchmark, using OpenAI-compatible providers. The project implements a **prompt-engineering–based Text-to-SQL system** that translates natural language questions into executable SQL queries over **unseen database schemas**, with evaluation conducted on the **Spider 1.0 development set (`dev.json`)**.
-
-The pipeline combines **retrieval-augmented in-context learning (`taken from test.json`)**, **chain-of-thought–style reasoning**, and **execution-based self-consistency** to improve robustness on complex, cross-domain queries. For each input question, semantically similar question–SQL examples are retrieved from the Spider dataset using sentence embeddings and incorporated into a **schema-aware prompt** that encourages structured reasoning over tables, joins, and conditions. The LLM then generates multiple candidate SQL queries, enabling diverse reasoning paths. All candidates are executed locally against the target database, and the final output is selected via **majority voting over execution results**, filtering out invalid or semantically incorrect queries.
+The pipeline combines **retrieval-augmented in-context learning** (with similar examples retrieved from `test.json`), **chain-of-thought–style reasoning**, and **execution-based self-consistency** to improve robustness on complex, cross-domain queries. For each input question, semantically similar question–SQL examples are retrieved using sentence embeddings and incorporated into a **schema-aware prompt** that encourages structured reasoning over tables, joins, and conditions. The LLM then generates multiple candidate SQL queries, enabling diverse reasoning paths. All candidates are executed locally against the target database, and the final output is selected via **majority voting over execution results**, filtering out invalid or semantically incorrect queries.
 
 This **retrieval–generation–selection pipeline** improves both exact-match and execution accuracy without supervised fine-tuning and provides a clean, extensible baseline that can be easily expanded with additional prompting strategies, schema formatting techniques, or caching mechanisms.
-
 
 ### System Architecture
 
@@ -147,7 +145,7 @@ The script will create a temporary `.sql` file, run `spider_data/evaluate.py`, a
 
 ### Working with the BIRD dataset
 
-To run the pipeline on the BIRD dev split, point the configuration to the BIRD assets:
+To run the pipeline on the BIRD dev file, point the configuration to the BIRD assets:
 
 ```json
 {
