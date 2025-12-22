@@ -39,7 +39,7 @@ root
 ├── output/                     # Run artifacts
 │   ├── log/                    # Log files
 │   └── predicted/              # Generated SQL predictions
-├── data/                       # Contains spider_data and bird dataset (containing dev.json, train.json, test.json and databases)
+├── data/                       # Root folder contains spider_data and bird dataset (containing dev.json, train.json, test.json and databases)
 ├── README.md                   # This file
 ├── requirements.txt            # Python dependencies
 ├── .gitattributes
